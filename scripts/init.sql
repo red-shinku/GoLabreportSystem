@@ -75,7 +75,7 @@ create table Project(
 --     截止时间
     deadline datetime,
 --  项目开启状态
-    isActive bool not null default false,
+    isActive bool not null default true,
 
     FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE
 );
