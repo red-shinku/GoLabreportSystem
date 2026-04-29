@@ -10,11 +10,9 @@ import (
 
 // error flag
 var (
-	ErrQuery        = errors.New("query failed")
-	ErrUserNotFound = errors.New("user not found")
-	ErrPasswd       = errors.New("password not correct")
-	ErrModify       = errors.New("modify database failed")
-	ErrNotFound     = errors.New("entry not found")
+	ErrQuery    = errors.New("query failed")
+	ErrModify   = errors.New("modify database failed")
+	ErrNotFound = errors.New("entry not found")
 )
 
 // name of mysql table
@@ -28,45 +26,389 @@ const (
 	tabStuReport      string = "StuReport"
 )
 
-// FIXME: 改为纯函数，注意添加必要形参
-// User :use for login、register and otherwise
-type User struct {
-	whoami uint8
-	number string
+// UsersRepo 关于用户表的操作
+type UsersRepo struct {
+	db *sql.DB
 }
 
-//login method, may implement the Login interface
-//after checking password successfully,
-//other code can use Whoami() to obtain identity,
-//then return corresponding website to user
-
-func (u *User) InputAccount(number string) {
-	u.number = number
-}
-
-func (u *User) CheckLogin(passwd string, db *sql.DB) error {
-	var correctPasswd string
-	var whoami uint8
-	errQ := db.QueryRow(
-		"select (passwd, identity) from %s where number = ?", tabUsers, u.number,
-	).Scan(&correctPasswd, &whoami)
-
-	if errQ != nil {
-		if errors.Is(errQ, sql.ErrNoRows) {
-			return ErrUserNotFound
+// QueryPasswd 获取密码
+func (u *UsersRepo) QueryPasswd(number string) (string, error) {
+	var passwd string
+	err := u.db.QueryRow("select passwd from %s where number = ?", tabUsers, number).Scan(&passwd)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("QueryPasswd(): %w", ErrNotFound)
 		}
-		return fmt.Errorf("%w: %v", ErrQuery, errQ)
+		return "", fmt.Errorf("QueryPasswd(): %w, %v", ErrQuery, err)
 	}
-	//FIXME: 密码的加密存储将如何处理
-	if passwd != correctPasswd {
-		return ErrPasswd
+	return passwd, nil
+}
+
+// WhoAmI 返回该号码对应的身份信息
+func (u *UsersRepo) WhoAmI(number string) uint8 {
+	var identity uint8
+	err := u.db.QueryRow("select identity from %s where number = ?", tabUsers, number).Scan(&identity)
+	if err != nil {
+		return 0
 	}
-	u.whoami = whoami
+	return identity
+}
+
+// UserInfo 扁平化的用户信息，用于初始化插入用户表
+type UserInfo struct {
+	Identity uint8
+	Number   string
+	Passwd   string
+}
+
+// InsertNewUser 插入新用户
+func (u *UsersRepo) InsertNewUser(user *UserInfo) error {
+	if u.db == nil || user == nil {
+		return fmt.Errorf("InsertNewUser: invalid input parameters")
+	}
+	res, err := u.db.Exec(
+		"insert into %s (identity, number, passwd) values (?, ?, ?)",
+		tabUsers,
+		user.Identity,
+		user.Number,
+		user.Passwd,
+	)
+	if err != nil {
+		return fmt.Errorf("InsertNewUser() insert failed: %w, %v", ErrModify, err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return fmt.Errorf("InsertNewUser(): %w", ErrNotFound)
+	}
 	return nil
 }
 
-func (u *User) Whoami() uint8 {
-	return u.whoami
+// InsertNewUserBatch 批量插入新用户
+func (u *UsersRepo) InsertNewUserBatch(users *[]UserInfo) error {
+	if u.db == nil || users == nil {
+		return fmt.Errorf("InsertNewUserBatch: invalid input parameters")
+	}
+
+	stmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers))
+	if err != nil {
+		return fmt.Errorf("InsertNewUserBatch() prepare failed: %w, %v", ErrModify, err)
+	}
+	defer stmt.Close()
+
+	for _, user := range *users {
+		res, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
+		if err != nil {
+			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", ErrModify, err)
+		}
+		count, _ := res.RowsAffected()
+		if count == 0 {
+			return fmt.Errorf("InsertNewUserBatch(): %w", ErrNotFound)
+		}
+	}
+	return nil
+}
+
+// ChangePassword 修改User表的密码
+func (u *UsersRepo) ChangePassword(userNumber string, newPassword string) error {
+	res, err := u.db.Exec("update %s set passwd = ? where number = ?",
+		tabUsers, newPassword, userNumber)
+	if err != nil {
+		return fmt.Errorf("ChangePassword(): %w, %v", ErrModify, err)
+	}
+	if count, _ := res.RowsAffected(); count == 0 {
+		return fmt.Errorf("ChangePassword(): %w", ErrNotFound)
+	}
+	return nil
+}
+
+// ProjectRepo 关于项目表的操作
+type ProjectRepo struct {
+	db *sql.DB
+}
+
+// StudentProjectRow 扁平化的学生项目列表查询结果，返回给上层
+type StudentProjectRow struct {
+	CourseName  string
+	ProjectID   uint
+	ProjectName string
+	StartTime   time.Time
+	CloseTime   time.Time
+	IsActive    bool
+	StuReportID sql.NullInt32
+}
+
+// QueryStuProject 查询一个学生的所有项目及其信息
+func (p *ProjectRepo) QueryStuProject(studentID string) ([]StudentProjectRow, error) {
+	query := fmt.Sprintf("select c.courseName, p.projectID, p.projectName, p.startTime, p.deadline, p.isActive, srp.stuReportID "+
+		"from %s stuc "+
+		"join %s coff on stuc.offeringID = coff.offeringID "+
+		"join %s c on coff.courseID = c.courseID "+
+		"join %s p on coff.offeringID = p.offeringID "+
+		"join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
+		"where stuc.studentID = ?",
+		tabStudentCourse, tabCourseOffering, tabCourse, tabProject, tabStuReport)
+	scanFunc := func(rows *sql.Rows, row *StudentProjectRow) error {
+		return rows.Scan(&row.CourseName, &row.ProjectID, &row.ProjectName,
+			&row.StartTime, &row.CloseTime, &row.IsActive, &row.StuReportID)
+	}
+	args := []any{studentID}
+
+	var result []StudentProjectRow
+	if err := queryTemplate(p.db, query, args, scanFunc, &result); err != nil {
+		return nil, fmt.Errorf("QueryStuProject failed: %w", err)
+	}
+	return result, nil
+}
+
+// TeacherProjectRow 扁平化的教师管理项目列表，返回给上层
+type TeacherProjectRow struct {
+	CourseName  string
+	ClassName   string
+	ProjectID   uint
+	ProjectName string
+	CloseTime   time.Time
+	IsActive    bool
+}
+
+// QueryTeacherProject 查询一个教师所管理的项目，包含项目所属班级、课程等信息
+func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]TeacherProjectRow, error) {
+	query := fmt.Sprintf("select c.courseName, coff.className, p.projectID, p.projectName, p.deadline, p.isActive "+
+		"from %s tec "+
+		"join %s coff on tec.offeringID = coff.offeringID "+
+		"join %s c on coff.courseID = c.courseID "+
+		"join %s p on coff.offeringID = p.offeringID "+
+		"where teacherID = ?",
+		tabTeacherCourse, tabCourseOffering, tabCourse, tabProject)
+	scanFunc := func(rows *sql.Rows, row *TeacherProjectRow) error {
+		return rows.Scan(&row.CourseName, &row.ClassName, &row.ProjectID, &row.ProjectName,
+			&row.CloseTime, &row.IsActive)
+	}
+	args := []any{teacherID}
+
+	var result []TeacherProjectRow
+	if err := queryTemplate(p.db, query, args, scanFunc, &result); err != nil {
+		return nil, fmt.Errorf("QueryTeacherProject() failed: %w", err)
+	}
+	return result, nil
+}
+
+// UpdateProjectFlag 教师开启/关闭项目
+func (p *ProjectRepo) UpdateProjectFlag(projectID uint, flag bool) error {
+	res, err := p.db.Exec("update %s set isActive = ? where projectID = ?",
+		tabProject, flag, projectID)
+	if err != nil {
+		return fmt.Errorf("UpdateProjectFlag() failed: %w, %v", ErrModify, err)
+	}
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return ErrModify
+	}
+	return nil
+}
+
+// ProjectInfo 要插入表中的项目信息单行数据
+type ProjectInfo struct {
+	OfferingID      uint
+	ProjectName     string
+	ProjectFilePath string
+	StartTime       time.Time
+	CloseTime       time.Time
+}
+
+// AddProject 教师新建项目
+func (p *ProjectRepo) AddProject(project *ProjectInfo) error {
+	if p.db == nil || project == nil {
+		return fmt.Errorf("AddProject: invalid input parameters")
+	}
+
+	res, err := p.db.Exec(
+		"insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)",
+		tabProject,
+		project.OfferingID,
+		project.ProjectName,
+		project.ProjectFilePath,
+		project.StartTime,
+		project.CloseTime,
+	)
+	if err != nil {
+		return fmt.Errorf("AddProject() insert failed: %w, %v", ErrModify, err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return fmt.Errorf("AddProject(): %w", ErrNotFound)
+	}
+	return nil
+}
+
+// DelProject 教师删除项目
+func (p *ProjectRepo) DelProject(projectID uint) error {
+	if p.db == nil {
+		return fmt.Errorf("DelProject: invalid database connection")
+	}
+
+	res, err := p.db.Exec("delete from %s where projectID = ?", tabProject, projectID)
+	if err != nil {
+		return fmt.Errorf("DelProject(): %w, %v", ErrModify, err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return fmt.Errorf("DelProject() failed: %w", ErrNotFound)
+	}
+	return nil
+}
+
+// UpdateProjectFile 教师更新项目文件路径
+func (p *ProjectRepo) UpdateProjectFile(projectID uint, projectFilePath string) error {
+	if p.db == nil {
+		return fmt.Errorf("UpdateProjectFile: invalid database connection")
+	}
+
+	res, err := p.db.Exec("update %s set projectFilePath = ? where projectID = ?",
+		tabProject, projectFilePath, projectID)
+	if err != nil {
+		return fmt.Errorf("UpdateProjectFile() %w, %v", ErrModify, err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return fmt.Errorf("UpdateProjectFile() failed: %w", ErrNotFound)
+	}
+	return nil
+}
+
+// QueryProjectFile 获取项目文件路径
+func (p *ProjectRepo) QueryProjectFile(projectID uint) (string, error) {
+	if p.db == nil {
+		return "", fmt.Errorf("QueryProjectFile: invalid database connection")
+	}
+
+	var filePath string
+	err := p.db.QueryRow("select projectFilePath from %s where projectID = ?",
+		tabProject, projectID).Scan(&filePath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("QueryProjectFile() failed: %w", ErrNotFound)
+		}
+		return "", fmt.Errorf("QueryProjectFile(): %w, %v", ErrQuery, err)
+	}
+	return filePath, nil
+}
+
+// ReportRepo 关于报告表的操作
+type ReportRepo struct {
+	db *sql.DB
+}
+
+// StuReportStatus 一个项目中学生的完成情况
+type StuReportStatus struct {
+	StudentID   string
+	StuReportID sql.NullInt32
+}
+
+// QueryStuReportStatus 教师查询某项目下学生的完成情况
+func (r *ReportRepo) QueryStuReportStatus(projectID uint) ([]StuReportStatus, error) {
+	query := fmt.Sprintf("select srp.studentID, srp.stuReportID "+
+		"from %s p "+
+		"join %s srp on p.projectID = srp.projectID "+
+		"where projectID = ?",
+		tabProject, tabStuReport)
+	scanFunc := func(rows *sql.Rows, row *StuReportStatus) error {
+		return rows.Scan(&row.StudentID, &row.StuReportID)
+	}
+	args := []any{projectID}
+
+	var result []StuReportStatus
+	if err := queryTemplate(r.db, query, args, scanFunc, &result); err != nil {
+		return nil, fmt.Errorf("QueryStuProjectStatus() failed: %w", err)
+	}
+	return result, nil
+}
+
+// StuReportInfo 要插入表中的学生报告信息单行数据
+type StuReportInfo struct {
+	StudentID      string
+	ProjectID      uint
+	ReportFilePath string
+	SubmitTime     time.Time
+}
+
+// InsertStuReport 学生提交报告，报告表中插入新行
+func (r *ReportRepo) InsertStuReport(stuRp *StuReportInfo) error {
+	if r.db == nil {
+		return fmt.Errorf("InsertStuReport: invalid database connection")
+	}
+	res, err := r.db.Exec(
+		"insert into %s (studentID, projectID, reportFilePath, submitTime) values (?, ?, ?, ?)",
+		tabStuReport,
+		stuRp.StudentID,
+		stuRp.ProjectID,
+		stuRp.ReportFilePath,
+		stuRp.SubmitTime)
+	if err != nil {
+		return fmt.Errorf("InsertStuReport(): %w, %v", ErrModify, err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return fmt.Errorf("InsertStuReport() invailed")
+	}
+	return nil
+}
+
+// QueryStuReportFileAll 获取某项目下，所有学生的报告文件路径
+func (r *ReportRepo) QueryStuReportFileAll(projectID uint) ([]string, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("QueryStuReportFileAll: invalid database connection")
+	}
+	query := fmt.Sprintf("select reportFilePath from %s where projectID = ?", tabStuReport)
+	scanFunc := func(rows *sql.Rows, row *string) error {
+		return rows.Scan(row)
+	}
+	args := []any{projectID}
+
+	var result []string
+	if err := queryTemplate(r.db, query, args, scanFunc, &result); err != nil {
+		return nil, fmt.Errorf("QueryStuReportFileAll(): %w", err)
+	}
+	return result, nil
+}
+
+// ManCourseOfferRepo 学生/教师选课表相关操作
+type ManCourseOfferRepo struct {
+	db *sql.DB
+}
+
+// StudentCourseInfo 扁平化的学生选课信息
+type StudentCourseInfo struct {
+	StudentID  string
+	OfferingID uint
+}
+
+// InsertStuCourseOffer 批量添加学生选课，插入学生选课表
+func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]StudentCourseInfo) error {
+	if mco.db == nil || courses == nil {
+		return fmt.Errorf("InsertStuCourseOffer: invalid input parameters")
+	}
+	for _, course := range *courses {
+		res, err := mco.db.Exec(
+			"insert into %s (studentID, offeringID) values (?, ?)",
+			tabStudentCourse,
+			course.StudentID,
+			course.OfferingID,
+		)
+		if err != nil {
+			return fmt.Errorf("InsertStuCourseOffer(): %w, %v", ErrModify, err)
+		}
+
+		count, _ := res.RowsAffected()
+		if count == 0 {
+			return fmt.Errorf("InsertStuCourseOffer(): %w", ErrNotFound)
+		}
+	}
+	return nil
 }
 
 // queryTemplate 多行查询模版
@@ -90,270 +432,3 @@ func queryTemplate[T any](db *sql.DB, query string, args []any,
 	}
 	return nil
 }
-
-// StudentProjectRow 扁平化的学生项目列表查询结果，返回给上层
-type StudentProjectRow struct {
-	CourseName  string
-	ProjectID   uint
-	ProjectName string
-	StartTime   time.Time
-	CloseTime   time.Time
-	IsActive    bool
-	StuReportID sql.NullInt32
-}
-
-// QueryStuProject 查询一个学生的所有项目及其信息
-func QueryStuProject(db *sql.DB, studentID string) ([]StudentProjectRow, error) {
-	query := fmt.Sprintf("select c.courseName, p.projectID, p.projectName, p.startTime, p.deadline, p.isActive, srp.stuReportID "+
-		"from %s stuc "+
-		"join %s coff on stuc.offeringID = coff.offeringID "+
-		"join %s c on coff.courseID = c.courseID "+
-		"join %s p on coff.offeringID = p.offeringID "+
-		"join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
-		"where stuc.studentID = ?",
-		tabStudentCourse, tabCourseOffering, tabCourse, tabProject, tabStuReport)
-	scanFunc := func(rows *sql.Rows, row *StudentProjectRow) error {
-		return rows.Scan(&row.CourseName, &row.ProjectID, &row.ProjectName,
-			&row.StartTime, &row.CloseTime, &row.IsActive, &row.StuReportID)
-	}
-	args := []any{studentID}
-
-	var result []StudentProjectRow
-	if err := queryTemplate(db, query, args, scanFunc, &result); err != nil {
-		return nil, fmt.Errorf("QueryStuProject failed: %w", err)
-	}
-	return result, nil
-}
-
-// TeacherProjectRow 扁平化的教师管理项目列表，返回给上层
-type TeacherProjectRow struct {
-	CourseName  string
-	ClassName   string
-	ProjectID   uint
-	ProjectName string
-	CloseTime   time.Time
-	IsActive    bool
-}
-
-// QueryTeacherProject 查询一个教师所管理的项目，包含项目所属班级、课程等信息
-func QueryTeacherProject(db *sql.DB, teacherID string) ([]TeacherProjectRow, error) {
-	query := fmt.Sprintf("select c.courseName, coff.className, p.projectID, p.projectName, p.deadline, p.isActive "+
-		"from %s tec "+
-		"join %s coff on tec.offeringID = coff.offeringID "+
-		"join %s c on coff.courseID = c.courseID "+
-		"join %s p on coff.offeringID = p.offeringID "+
-		"where teacherID = ?",
-		tabTeacherCourse, tabCourseOffering, tabCourse, tabProject)
-	scanFunc := func(rows *sql.Rows, row *TeacherProjectRow) error {
-		return rows.Scan(&row.CourseName, &row.ClassName, &row.ProjectID, &row.ProjectName,
-			&row.CloseTime, &row.IsActive)
-	}
-	args := []any{teacherID}
-
-	var result []TeacherProjectRow
-	if err := queryTemplate(db, query, args, scanFunc, &result); err != nil {
-		return nil, fmt.Errorf("QueryTeacherProject() failed: %w", err)
-	}
-	return result, nil
-}
-
-// StuProjectStatus 一个项目中学生的完成情况
-type StuProjectStatus struct {
-	StudentID   string
-	StuReportID sql.NullInt32
-}
-
-// QueryStuProjectStatus 教师查询某项目下学生的完成情况
-func QueryStuProjectStatus(db *sql.DB, projectID uint) ([]StuProjectStatus, error) {
-	query := fmt.Sprintf("select srp.studentID, srp.stuReportID "+
-		"from %s p "+
-		"join %s srp on p.projectID = srp.projectID "+
-		"where projectID = ?",
-		tabProject, tabStuReport)
-	scanFunc := func(rows *sql.Rows, row *StuProjectStatus) error {
-		return rows.Scan(&row.StudentID, &row.StuReportID)
-	}
-	args := []any{projectID}
-
-	var result []StuProjectStatus
-	if err := queryTemplate(db, query, args, scanFunc, &result); err != nil {
-		return nil, fmt.Errorf("QueryStuProjectStatus() failed: %w", err)
-	}
-	return result, nil
-}
-
-// UpdateProjectFlag 教师开启/关闭项目
-func UpdateProjectFlag(db *sql.DB, projectID uint, flag bool) error {
-	res, err := db.Exec("update %s set isActive = ? where projectID = ?",
-		tabProject, flag, projectID)
-	if err != nil {
-		return fmt.Errorf("UpdateProjectFlag() failed: %w, %v", ErrModify, err)
-	}
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return ErrModify
-	}
-	return nil
-}
-
-// ProjectMessage 要插入表中的项目信息单行数据
-type ProjectMessage struct {
-	OfferingID      uint
-	ProjectName     string
-	ProjectFilePath string
-	StartTime       time.Time
-	CloseTime       time.Time
-}
-
-// AddProject 教师新建项目
-func AddProject(db *sql.DB, project *ProjectMessage) error {
-	if db == nil || project == nil {
-		return fmt.Errorf("AddProject: invalid input parameters")
-	}
-
-	res, err := db.Exec(
-		"insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)",
-		tabProject,
-		project.OfferingID,
-		project.ProjectName,
-		project.ProjectFilePath,
-		project.StartTime,
-		project.CloseTime,
-	)
-	if err != nil {
-		return fmt.Errorf("AddProject() insert failed: %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("AddProject(): %w", ErrNotFound)
-	}
-	return nil
-}
-
-// DelProject 教师删除项目
-func DelProject(db *sql.DB, projectID uint) error {
-	if db == nil {
-		return fmt.Errorf("DelProject: invalid database connection")
-	}
-
-	res, err := db.Exec("delete from %s where projectID = ?", tabProject, projectID)
-	if err != nil {
-		return fmt.Errorf("DelProject(): %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("DelProject() failed: %w", ErrNotFound)
-	}
-	return nil
-}
-
-// UpdateProjectFile 教师更新项目文件路径
-func UpdateProjectFile(db *sql.DB, projectID uint, projectFilePath string) error {
-	if db == nil {
-		return fmt.Errorf("UpdateProjectFile: invalid database connection")
-	}
-
-	res, err := db.Exec("update %s set projectFilePath = ? where projectID = ?",
-		tabProject, projectFilePath, projectID)
-	if err != nil {
-		return fmt.Errorf("UpdateProjectFile() %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("UpdateProjectFile() failed: %w", ErrNotFound)
-	}
-	return nil
-}
-
-// QueryProjectFile 获取项目文件路径
-func QueryProjectFile(db *sql.DB, projectID uint) (string, error) {
-	if db == nil {
-		return "", fmt.Errorf("QueryProjectFile: invalid database connection")
-	}
-
-	var filePath string
-	err := db.QueryRow("select projectFilePath from %s where projectID = ?",
-		tabProject, projectID).Scan(&filePath)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("QueryProjectFile() failed: %w", ErrNotFound)
-		}
-		return "", fmt.Errorf("QueryProjectFile(): %w, %v", ErrQuery, err)
-	}
-	return filePath, nil
-}
-
-// StuReportMessage 要插入表中的学生报告信息单行数据
-type StuReportMessage struct {
-	StudentID      string
-	ProjectID      uint
-	ReportFilePath string
-	SubmitTime     time.Time
-}
-
-// InsertStuReport 学生提交报告，报告表中插入新行
-func InsertStuReport(db *sql.DB, filePath string) error {
-	if db == nil {
-		return fmt.Errorf("InsertStuReport: invalid database connection")
-	}
-	//TODO: 插入逻辑
-}
-
-/*
-	register method, may implement the Register interface
-*/
-
-// FIXME: 批量插入?
-func (u *User) InsertNewAccount(number, password string) {
-	//init passwd = number
-	u.number = number
-	//TODO: 插入数据库
-}
-
-/*
-	change password method, when forget password
-*/
-
-func (u *User) ChangePassword(password string) {
-	//TODO: 修改密码：修改数据库
-}
-
-// QueryCourses query courses' name based on u.whoami
-// the courses for student is which they study
-// or for teacher is which they manage
-//func (u *User) QueryCourses(db *sql.DB) ([]string, error) {
-//	var tab string
-//	switch u.whoami {
-//	case 1:
-//		tab = tabStudentCourse
-//	case 2:
-//		tab = tabTeacherCourse
-//		//FIXME: 如何解决查询课程的无效身份
-//	}
-//
-//	rows, errQ := db.Query(
-//		"select c.courseName from %s st "+
-//			"join %s coff on st.offeringID = coff.offeringID "+
-//			"join %s c on coff.courseID = c.courseID "+
-//			"where number = ?",
-//		tab, tabCourseOffering, tabCourse, u.number,
-//	)
-//	if errQ != nil {
-//		return nil, fmt.Errorf("%w: %v", ErrQuery, errQ)
-//	}
-//	var result []string
-//	for rows.Next() {
-//		var name string
-//		if err := rows.Scan(&name); err != nil {
-//			return nil, fmt.Errorf("%w: %v", ErrQuery, err)
-//		}
-//		result = append(result, name)
-//	}
-//	if err := rows.Err(); err != nil {
-//		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
-//	}
-//	return result, nil
-//}
