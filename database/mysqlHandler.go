@@ -1,11 +1,11 @@
 package database
 
 import (
+	"LabSystem/domain"
 	"database/sql"
 	"errors"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"time"
 )
 
 // error flag
@@ -54,15 +54,8 @@ func (u *UsersRepo) WhoAmI(number string) uint8 {
 	return identity
 }
 
-// UserInfo 扁平化的用户信息，用于初始化插入用户表
-type UserInfo struct {
-	Identity uint8
-	Number   string
-	Passwd   string
-}
-
 // InsertNewUser 插入新用户
-func (u *UsersRepo) InsertNewUser(user *UserInfo) error {
+func (u *UsersRepo) InsertNewUser(user *domain.UserInfo) error {
 	if u.db == nil || user == nil {
 		return fmt.Errorf("InsertNewUser: invalid input parameters")
 	}
@@ -85,7 +78,7 @@ func (u *UsersRepo) InsertNewUser(user *UserInfo) error {
 }
 
 // InsertNewUserBatch 批量插入新用户
-func (u *UsersRepo) InsertNewUserBatch(users *[]UserInfo) error {
+func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 	if u.db == nil || users == nil {
 		return fmt.Errorf("InsertNewUserBatch: invalid input parameters")
 	}
@@ -127,19 +120,8 @@ type ProjectRepo struct {
 	db *sql.DB
 }
 
-// StudentProjectRow 扁平化的学生项目列表查询结果，返回给上层
-type StudentProjectRow struct {
-	CourseName  string
-	ProjectID   uint
-	ProjectName string
-	StartTime   time.Time
-	CloseTime   time.Time
-	IsActive    bool
-	StuReportID sql.NullInt32
-}
-
 // QueryStuProject 查询一个学生的所有项目及其信息
-func (p *ProjectRepo) QueryStuProject(studentID string) ([]StudentProjectRow, error) {
+func (p *ProjectRepo) QueryStuProject(studentID string) ([]domain.StudentProjectInfo, error) {
 	query := fmt.Sprintf("select c.courseName, p.projectID, p.projectName, p.startTime, p.deadline, p.isActive, srp.stuReportID "+
 		"from %s stuc "+
 		"join %s coff on stuc.offeringID = coff.offeringID "+
@@ -148,31 +130,21 @@ func (p *ProjectRepo) QueryStuProject(studentID string) ([]StudentProjectRow, er
 		"join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
 		"where stuc.studentID = ?",
 		tabStudentCourse, tabCourseOffering, tabCourse, tabProject, tabStuReport)
-	scanFunc := func(rows *sql.Rows, row *StudentProjectRow) error {
+	scanFunc := func(rows *sql.Rows, row *domain.StudentProjectInfo) error {
 		return rows.Scan(&row.CourseName, &row.ProjectID, &row.ProjectName,
 			&row.StartTime, &row.CloseTime, &row.IsActive, &row.StuReportID)
 	}
 	args := []any{studentID}
 
-	var result []StudentProjectRow
+	var result []domain.StudentProjectInfo
 	if err := queryTemplate(p.db, query, args, scanFunc, &result); err != nil {
 		return nil, fmt.Errorf("QueryStuProject failed: %w", err)
 	}
 	return result, nil
 }
 
-// TeacherProjectRow 扁平化的教师管理项目列表，返回给上层
-type TeacherProjectRow struct {
-	CourseName  string
-	ClassName   string
-	ProjectID   uint
-	ProjectName string
-	CloseTime   time.Time
-	IsActive    bool
-}
-
 // QueryTeacherProject 查询一个教师所管理的项目，包含项目所属班级、课程等信息
-func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]TeacherProjectRow, error) {
+func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherProjectInfo, error) {
 	query := fmt.Sprintf("select c.courseName, coff.className, p.projectID, p.projectName, p.deadline, p.isActive "+
 		"from %s tec "+
 		"join %s coff on tec.offeringID = coff.offeringID "+
@@ -180,13 +152,13 @@ func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]TeacherProjectRow
 		"join %s p on coff.offeringID = p.offeringID "+
 		"where teacherID = ?",
 		tabTeacherCourse, tabCourseOffering, tabCourse, tabProject)
-	scanFunc := func(rows *sql.Rows, row *TeacherProjectRow) error {
+	scanFunc := func(rows *sql.Rows, row *domain.TeacherProjectInfo) error {
 		return rows.Scan(&row.CourseName, &row.ClassName, &row.ProjectID, &row.ProjectName,
 			&row.CloseTime, &row.IsActive)
 	}
 	args := []any{teacherID}
 
-	var result []TeacherProjectRow
+	var result []domain.TeacherProjectInfo
 	if err := queryTemplate(p.db, query, args, scanFunc, &result); err != nil {
 		return nil, fmt.Errorf("QueryTeacherProject() failed: %w", err)
 	}
@@ -207,17 +179,8 @@ func (p *ProjectRepo) UpdateProjectFlag(projectID uint, flag bool) error {
 	return nil
 }
 
-// ProjectInfo 要插入表中的项目信息单行数据
-type ProjectInfo struct {
-	OfferingID      uint
-	ProjectName     string
-	ProjectFilePath string
-	StartTime       time.Time
-	CloseTime       time.Time
-}
-
 // AddProject 教师新建项目
-func (p *ProjectRepo) AddProject(project *ProjectInfo) error {
+func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 	if p.db == nil || project == nil {
 		return fmt.Errorf("AddProject: invalid input parameters")
 	}
@@ -302,41 +265,27 @@ type ReportRepo struct {
 	db *sql.DB
 }
 
-// StuReportStatus 一个项目中学生的完成情况
-type StuReportStatus struct {
-	StudentID   string
-	StuReportID sql.NullInt32
-}
-
 // QueryStuReportStatus 教师查询某项目下学生的完成情况
-func (r *ReportRepo) QueryStuReportStatus(projectID uint) ([]StuReportStatus, error) {
+func (r *ReportRepo) QueryStuReportStatus(projectID uint) ([]domain.StuReportStatus, error) {
 	query := fmt.Sprintf("select srp.studentID, srp.stuReportID "+
 		"from %s p "+
 		"join %s srp on p.projectID = srp.projectID "+
 		"where projectID = ?",
 		tabProject, tabStuReport)
-	scanFunc := func(rows *sql.Rows, row *StuReportStatus) error {
+	scanFunc := func(rows *sql.Rows, row *domain.StuReportStatus) error {
 		return rows.Scan(&row.StudentID, &row.StuReportID)
 	}
 	args := []any{projectID}
 
-	var result []StuReportStatus
+	var result []domain.StuReportStatus
 	if err := queryTemplate(r.db, query, args, scanFunc, &result); err != nil {
 		return nil, fmt.Errorf("QueryStuProjectStatus() failed: %w", err)
 	}
 	return result, nil
 }
 
-// StuReportInfo 要插入表中的学生报告信息单行数据
-type StuReportInfo struct {
-	StudentID      string
-	ProjectID      uint
-	ReportFilePath string
-	SubmitTime     time.Time
-}
-
 // InsertStuReport 学生提交报告，报告表中插入新行
-func (r *ReportRepo) InsertStuReport(stuRp *StuReportInfo) error {
+func (r *ReportRepo) InsertStuReport(stuRp *domain.StuReportInfo) error {
 	if r.db == nil {
 		return fmt.Errorf("InsertStuReport: invalid database connection")
 	}
@@ -381,14 +330,8 @@ type ManCourseOfferRepo struct {
 	db *sql.DB
 }
 
-// StudentCourseInfo 扁平化的学生选课信息
-type StudentCourseInfo struct {
-	StudentID  string
-	OfferingID uint
-}
-
 // InsertStuCourseOffer 批量添加学生选课，插入学生选课表
-func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]StudentCourseInfo) error {
+func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]domain.StudentCourseInfo) error {
 	if mco.db == nil || courses == nil {
 		return fmt.Errorf("InsertStuCourseOffer: invalid input parameters")
 	}
