@@ -34,7 +34,7 @@ type UsersRepo struct {
 // QueryPasswd 获取密码
 func (u *UsersRepo) QueryPasswd(number string) (string, error) {
 	var passwd string
-	err := u.db.QueryRow("select passwd from %s where number = ?", tabUsers, number).Scan(&passwd)
+	err := u.db.QueryRow(fmt.Sprintf("select passwd from %s where number = ?", tabUsers), number).Scan(&passwd)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("QueryPasswd(): %w", ErrNotFound)
@@ -47,7 +47,7 @@ func (u *UsersRepo) QueryPasswd(number string) (string, error) {
 // WhoAmI 返回该号码对应的身份信息
 func (u *UsersRepo) WhoAmI(number string) uint8 {
 	var identity uint8
-	err := u.db.QueryRow("select identity from %s where number = ?", tabUsers, number).Scan(&identity)
+	err := u.db.QueryRow(fmt.Sprintf("select identity from %s where number = ?", tabUsers), number).Scan(&identity)
 	if err != nil {
 		return 0
 	}
@@ -59,9 +59,8 @@ func (u *UsersRepo) InsertNewUser(user *domain.UserInfo) error {
 	if u.db == nil || user == nil {
 		return fmt.Errorf("InsertNewUser: invalid input parameters")
 	}
-	res, err := u.db.Exec(
-		"insert into %s (identity, number, passwd) values (?, ?, ?)",
-		tabUsers,
+	_, err := u.db.Exec(
+		fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers),
 		user.Identity,
 		user.Number,
 		user.Passwd,
@@ -69,15 +68,11 @@ func (u *UsersRepo) InsertNewUser(user *domain.UserInfo) error {
 	if err != nil {
 		return fmt.Errorf("InsertNewUser() insert failed: %w, %v", ErrModify, err)
 	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("InsertNewUser(): %w", ErrNotFound)
-	}
 	return nil
 }
 
 // InsertNewUserBatch 批量插入新用户
+// FIXME: 使用事务
 func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 	if u.db == nil || users == nil {
 		return fmt.Errorf("InsertNewUserBatch: invalid input parameters")
@@ -90,13 +85,9 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 	defer stmt.Close()
 
 	for _, user := range *users {
-		res, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
+		_, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
 		if err != nil {
 			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", ErrModify, err)
-		}
-		count, _ := res.RowsAffected()
-		if count == 0 {
-			return fmt.Errorf("InsertNewUserBatch(): %w", ErrNotFound)
 		}
 	}
 	return nil
@@ -104,13 +95,10 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 
 // ChangePassword 修改User表的密码
 func (u *UsersRepo) ChangePassword(userNumber string, newPassword string) error {
-	res, err := u.db.Exec("update %s set passwd = ? where number = ?",
-		tabUsers, newPassword, userNumber)
+	_, err := u.db.Exec(fmt.Sprintf("update %s set passwd = ? where number = ?", tabUsers),
+		newPassword, userNumber)
 	if err != nil {
 		return fmt.Errorf("ChangePassword(): %w, %v", ErrModify, err)
-	}
-	if count, _ := res.RowsAffected(); count == 0 {
-		return fmt.Errorf("ChangePassword(): %w", ErrNotFound)
 	}
 	return nil
 }
@@ -150,7 +138,7 @@ func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherPro
 		"join %s coff on tec.offeringID = coff.offeringID "+
 		"join %s c on coff.courseID = c.courseID "+
 		"join %s p on coff.offeringID = p.offeringID "+
-		"where teacherID = ?",
+		"where tec.teacherID = ?",
 		tabTeacherCourse, tabCourseOffering, tabCourse, tabProject)
 	scanFunc := func(rows *sql.Rows, row *domain.TeacherProjectInfo) error {
 		return rows.Scan(&row.CourseName, &row.ClassName, &row.ProjectID, &row.ProjectName,
@@ -167,14 +155,10 @@ func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherPro
 
 // UpdateProjectFlag 教师开启/关闭项目
 func (p *ProjectRepo) UpdateProjectFlag(projectID uint, flag bool) error {
-	res, err := p.db.Exec("update %s set isActive = ? where projectID = ?",
-		tabProject, flag, projectID)
+	_, err := p.db.Exec(fmt.Sprintf("update %s set isActive = ? where projectID = ?", tabProject),
+		flag, projectID)
 	if err != nil {
 		return fmt.Errorf("UpdateProjectFlag() failed: %w, %v", ErrModify, err)
-	}
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return ErrModify
 	}
 	return nil
 }
@@ -185,9 +169,8 @@ func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 		return fmt.Errorf("AddProject: invalid input parameters")
 	}
 
-	res, err := p.db.Exec(
-		"insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)",
-		tabProject,
+	_, err := p.db.Exec(
+		fmt.Sprintf("insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)", tabProject),
 		project.OfferingID,
 		project.ProjectName,
 		project.ProjectFilePath,
@@ -196,11 +179,6 @@ func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 	)
 	if err != nil {
 		return fmt.Errorf("AddProject() insert failed: %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("AddProject(): %w", ErrNotFound)
 	}
 	return nil
 }
@@ -211,7 +189,7 @@ func (p *ProjectRepo) DelProject(projectID uint) error {
 		return fmt.Errorf("DelProject: invalid database connection")
 	}
 
-	res, err := p.db.Exec("delete from %s where projectID = ?", tabProject, projectID)
+	res, err := p.db.Exec(fmt.Sprintf("delete from %s where projectID = ?", tabProject), projectID)
 	if err != nil {
 		return fmt.Errorf("DelProject(): %w, %v", ErrModify, err)
 	}
@@ -229,15 +207,10 @@ func (p *ProjectRepo) UpdateProjectFile(projectID uint, projectFilePath string) 
 		return fmt.Errorf("UpdateProjectFile: invalid database connection")
 	}
 
-	res, err := p.db.Exec("update %s set projectFilePath = ? where projectID = ?",
-		tabProject, projectFilePath, projectID)
+	_, err := p.db.Exec(fmt.Sprintf("update %s set projectFilePath = ? where projectID = ?", tabProject),
+		projectFilePath, projectID)
 	if err != nil {
 		return fmt.Errorf("UpdateProjectFile() %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("UpdateProjectFile() failed: %w", ErrNotFound)
 	}
 	return nil
 }
@@ -249,8 +222,8 @@ func (p *ProjectRepo) QueryProjectFile(projectID uint) (string, error) {
 	}
 
 	var filePath string
-	err := p.db.QueryRow("select projectFilePath from %s where projectID = ?",
-		tabProject, projectID).Scan(&filePath)
+	err := p.db.QueryRow(fmt.Sprintf("select projectFilePath from %s where projectID = ?", tabProject),
+		projectID).Scan(&filePath)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("QueryProjectFile() failed: %w", ErrNotFound)
@@ -267,11 +240,13 @@ type ReportRepo struct {
 
 // QueryStuReportStatus 教师查询某项目下学生的完成情况
 func (r *ReportRepo) QueryStuReportStatus(projectID uint) ([]domain.StuReportStatus, error) {
-	query := fmt.Sprintf("select srp.studentID, srp.stuReportID "+
-		"from %s p "+
-		"join %s srp on p.projectID = srp.projectID "+
-		"where projectID = ?",
-		tabProject, tabStuReport)
+	query := fmt.Sprintf("select stuc.studentID, srp.stuReportID "+
+		"from %s stuc "+
+		"join %s coff on stuc.offeringID = coff.offeringID "+
+		"join %s p on coff.offeringID = p.offeringID "+
+		"left join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
+		"where p.projectID = ?",
+		tabStudentCourse, tabCourseOffering, tabProject, tabStuReport)
 	scanFunc := func(rows *sql.Rows, row *domain.StuReportStatus) error {
 		return rows.Scan(&row.StudentID, &row.StuReportID)
 	}
@@ -289,20 +264,14 @@ func (r *ReportRepo) InsertStuReport(stuRp *domain.StuReportInfo) error {
 	if r.db == nil {
 		return fmt.Errorf("InsertStuReport: invalid database connection")
 	}
-	res, err := r.db.Exec(
-		"insert into %s (studentID, projectID, reportFilePath, submitTime) values (?, ?, ?, ?)",
-		tabStuReport,
+	_, err := r.db.Exec(
+		fmt.Sprintf("insert into %s (studentID, projectID, reportFilePath, submitTime) values (?, ?, ?, ?)", tabStuReport),
 		stuRp.StudentID,
 		stuRp.ProjectID,
 		stuRp.ReportFilePath,
 		stuRp.SubmitTime)
 	if err != nil {
 		return fmt.Errorf("InsertStuReport(): %w, %v", ErrModify, err)
-	}
-
-	count, _ := res.RowsAffected()
-	if count == 0 {
-		return fmt.Errorf("InsertStuReport() invailed")
 	}
 	return nil
 }
@@ -331,24 +300,19 @@ type ManCourseOfferRepo struct {
 }
 
 // InsertStuCourseOffer 批量添加学生选课，插入学生选课表
+// FIXME: 使用事务
 func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]domain.StudentCourseInfo) error {
 	if mco.db == nil || courses == nil {
 		return fmt.Errorf("InsertStuCourseOffer: invalid input parameters")
 	}
 	for _, course := range *courses {
-		res, err := mco.db.Exec(
-			"insert into %s (studentID, offeringID) values (?, ?)",
-			tabStudentCourse,
+		_, err := mco.db.Exec(
+			fmt.Sprintf("insert into %s (studentID, offeringID) values (?, ?)", tabStudentCourse),
 			course.StudentID,
 			course.OfferingID,
 		)
 		if err != nil {
 			return fmt.Errorf("InsertStuCourseOffer(): %w, %v", ErrModify, err)
-		}
-
-		count, _ := res.RowsAffected()
-		if count == 0 {
-			return fmt.Errorf("InsertStuCourseOffer(): %w", ErrNotFound)
 		}
 	}
 	return nil
