@@ -8,13 +8,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// error flag
-var (
-	ErrQuery    = errors.New("query failed")
-	ErrModify   = errors.New("modify database failed")
-	ErrNotFound = errors.New("entry not found")
-)
-
 // name of mysql table
 const (
 	tabUsers          string = "Users"
@@ -37,21 +30,21 @@ func (u *UsersRepo) QueryPasswd(number string) (string, error) {
 	err := u.db.QueryRow(fmt.Sprintf("select passwd from %s where number = ?", tabUsers), number).Scan(&passwd)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("QueryPasswd(): %w", ErrNotFound)
+			return "", fmt.Errorf("QueryPasswd(): %w", domain.ErrNotFound)
 		}
-		return "", fmt.Errorf("QueryPasswd(): %w, %v", ErrQuery, err)
+		return "", fmt.Errorf("QueryPasswd(): %w, %v", domain.ErrQuery, err)
 	}
 	return passwd, nil
 }
 
 // WhoAmI 返回该号码对应的身份信息
-func (u *UsersRepo) WhoAmI(number string) uint8 {
+func (u *UsersRepo) WhoAmI(number string) (uint8, error) {
 	var identity uint8
 	err := u.db.QueryRow(fmt.Sprintf("select identity from %s where number = ?", tabUsers), number).Scan(&identity)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("WhoAmI(): %w, %v", domain.ErrQuery, err)
 	}
-	return identity
+	return identity, nil
 }
 
 // InsertNewUser 插入新用户
@@ -66,7 +59,7 @@ func (u *UsersRepo) InsertNewUser(user *domain.UserInfo) error {
 		user.Passwd,
 	)
 	if err != nil {
-		return fmt.Errorf("InsertNewUser() insert failed: %w, %v", ErrModify, err)
+		return fmt.Errorf("InsertNewUser() insert failed: %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
@@ -80,14 +73,14 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 
 	stmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers))
 	if err != nil {
-		return fmt.Errorf("InsertNewUserBatch() prepare failed: %w, %v", ErrModify, err)
+		return fmt.Errorf("InsertNewUserBatch() prepare failed: %w, %v", domain.ErrModify, err)
 	}
 	defer stmt.Close()
 
 	for _, user := range *users {
 		_, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
 		if err != nil {
-			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", ErrModify, err)
+			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", domain.ErrModify, err)
 		}
 	}
 	return nil
@@ -98,7 +91,7 @@ func (u *UsersRepo) ChangePassword(userNumber string, newPassword string) error 
 	_, err := u.db.Exec(fmt.Sprintf("update %s set passwd = ? where number = ?", tabUsers),
 		newPassword, userNumber)
 	if err != nil {
-		return fmt.Errorf("ChangePassword(): %w, %v", ErrModify, err)
+		return fmt.Errorf("ChangePassword(): %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
@@ -158,9 +151,18 @@ func (p *ProjectRepo) UpdateProjectFlag(projectID uint, flag bool) error {
 	_, err := p.db.Exec(fmt.Sprintf("update %s set isActive = ? where projectID = ?", tabProject),
 		flag, projectID)
 	if err != nil {
-		return fmt.Errorf("UpdateProjectFlag() failed: %w, %v", ErrModify, err)
+		return fmt.Errorf("UpdateProjectFlag() failed: %w, %v", domain.ErrModify, err)
 	}
 	return nil
+}
+
+func (p *ProjectRepo) QueryProjectFlag(projectID uint) (bool, error) {
+	query := fmt.Sprintf("select isActive from %s where projectID = ?", tabProject)
+	var flag bool
+	if err := p.db.QueryRow(query, projectID).Scan(&flag); err != nil {
+		return false, fmt.Errorf("QueryProjectFlag(): %v", err)
+	}
+	return flag, nil
 }
 
 // AddProject 教师新建项目
@@ -178,7 +180,7 @@ func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 		project.CloseTime,
 	)
 	if err != nil {
-		return fmt.Errorf("AddProject() insert failed: %w, %v", ErrModify, err)
+		return fmt.Errorf("AddProject() insert failed: %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
@@ -191,12 +193,12 @@ func (p *ProjectRepo) DelProject(projectID uint) error {
 
 	res, err := p.db.Exec(fmt.Sprintf("delete from %s where projectID = ?", tabProject), projectID)
 	if err != nil {
-		return fmt.Errorf("DelProject(): %w, %v", ErrModify, err)
+		return fmt.Errorf("DelProject(): %w, %v", domain.ErrModify, err)
 	}
 
 	count, _ := res.RowsAffected()
 	if count == 0 {
-		return fmt.Errorf("DelProject() failed: %w", ErrNotFound)
+		return fmt.Errorf("DelProject() failed: %w", domain.ErrNotFound)
 	}
 	return nil
 }
@@ -210,7 +212,7 @@ func (p *ProjectRepo) UpdateProjectFile(projectID uint, projectFilePath string) 
 	_, err := p.db.Exec(fmt.Sprintf("update %s set projectFilePath = ? where projectID = ?", tabProject),
 		projectFilePath, projectID)
 	if err != nil {
-		return fmt.Errorf("UpdateProjectFile() %w, %v", ErrModify, err)
+		return fmt.Errorf("UpdateProjectFile() %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
@@ -226,9 +228,9 @@ func (p *ProjectRepo) QueryProjectFile(projectID uint) (string, error) {
 		projectID).Scan(&filePath)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("QueryProjectFile() failed: %w", ErrNotFound)
+			return "", fmt.Errorf("QueryProjectFile() failed: %w", domain.ErrNotFound)
 		}
-		return "", fmt.Errorf("QueryProjectFile(): %w, %v", ErrQuery, err)
+		return "", fmt.Errorf("QueryProjectFile(): %w, %v", domain.ErrQuery, err)
 	}
 	return filePath, nil
 }
@@ -271,7 +273,7 @@ func (r *ReportRepo) InsertStuReport(stuRp *domain.StuReportInfo) error {
 		stuRp.ReportFilePath,
 		stuRp.SubmitTime)
 	if err != nil {
-		return fmt.Errorf("InsertStuReport(): %w, %v", ErrModify, err)
+		return fmt.Errorf("InsertStuReport(): %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
@@ -299,11 +301,11 @@ type ManCourseOfferRepo struct {
 	db *sql.DB
 }
 
-// InsertStuCourseOffer 批量添加学生选课，插入学生选课表
+// InsertStuCourseOfferBatch 批量添加学生选课，插入学生选课表
 // FIXME: 使用事务
-func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]domain.StudentCourseInfo) error {
+func (mco *ManCourseOfferRepo) InsertStuCourseOfferBatch(courses *[]domain.StudentCourseInfo) error {
 	if mco.db == nil || courses == nil {
-		return fmt.Errorf("InsertStuCourseOffer: invalid input parameters")
+		return fmt.Errorf("InsertStuCourseOfferBatch: invalid input parameters")
 	}
 	for _, course := range *courses {
 		_, err := mco.db.Exec(
@@ -312,7 +314,7 @@ func (mco *ManCourseOfferRepo) InsertStuCourseOffer(courses *[]domain.StudentCou
 			course.OfferingID,
 		)
 		if err != nil {
-			return fmt.Errorf("InsertStuCourseOffer(): %w, %v", ErrModify, err)
+			return fmt.Errorf("InsertStuCourseOfferBatch(): %w, %v", domain.ErrModify, err)
 		}
 	}
 	return nil
@@ -323,19 +325,19 @@ func queryTemplate[T any](db *sql.DB, query string, args []any,
 	scanFunc func(*sql.Rows, *T) error, result *[]T) error {
 	rows, errQ := db.Query(query, args...)
 	if errQ != nil {
-		return fmt.Errorf("%w: %v", ErrQuery, errQ)
+		return fmt.Errorf("%w: %v", domain.ErrQuery, errQ)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var row T
 		if err := scanFunc(rows, &row); err != nil {
-			return fmt.Errorf("%w: %v", ErrQuery, err)
+			return fmt.Errorf("%w: %v", domain.ErrQuery, err)
 		}
 		*result = append(*result, row)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("%w: %v", ErrQuery, err)
+		return fmt.Errorf("%w: %v", domain.ErrQuery, err)
 	}
 	return nil
 }
