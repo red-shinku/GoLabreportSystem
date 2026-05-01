@@ -6,10 +6,19 @@ package domain
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 )
 
-// UserInfo 扁平化的用户信息，用于初始化插入用户表
+// error flag
+var (
+	//FIXME: SQL操作错误不返回给上层？
+	ErrQuery    = errors.New("query failed")
+	ErrModify   = errors.New("modify database failed")
+	ErrNotFound = errors.New("entry not found")
+)
+
+// UserInfo 用户信息，用于初始化插入用户表
 type UserInfo struct {
 	Identity uint8
 	Number   string
