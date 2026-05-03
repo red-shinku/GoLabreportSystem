@@ -12,6 +12,8 @@ create table Users(
     identity tinyint unsigned not null comment '1=学生, 2=教师, 9=管理员',
 --     学号/工号
     number varchar(16) unique not null,
+--     姓名
+    name varchar(16),
 --     邮箱
     mail varchar(32) unique not null,
 --     密码，加密存储
@@ -38,7 +40,7 @@ CREATE TABLE CourseOffering (
     FOREIGN KEY (courseID) REFERENCES Course(courseID) ON DELETE CASCADE
 );
 
--- 学生信息表（所选课程）
+-- 学生选课表（所选课程）
 create table StudentCourse(
 --     学号
     studentID varchar(16),
@@ -49,7 +51,7 @@ create table StudentCourse(
     FOREIGN KEY (studentID) REFERENCES Users(number) ON DELETE CASCADE
 );
 
--- 教师信息表（所管课程）
+-- 教师选课表（所管课程）
 create table TeacherCourse(
 --     工号
     teacherID varchar(16),
