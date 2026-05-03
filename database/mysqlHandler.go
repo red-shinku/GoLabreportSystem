@@ -96,6 +96,19 @@ func (u *UsersRepo) ChangePassword(userNumber string, newPassword string) error 
 	return nil
 }
 
+// QueryStudentName 根据学生ID查询学生名
+func (u *UsersRepo) QueryStudentName(studentID string) (string, error) {
+	var studentName string
+	err := u.db.QueryRow(fmt.Sprintf("select name from %s where number = ?", tabUsers), studentID).Scan(&studentName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("QueryStudentName(): %w", domain.ErrNotFound)
+		}
+		return "", fmt.Errorf("QueryStudentName(): %w, %v", domain.ErrQuery, err)
+	}
+	return studentName, nil
+}
+
 // ProjectRepo 关于项目表的操作
 type ProjectRepo struct {
 	db *sql.DB
@@ -233,6 +246,30 @@ func (p *ProjectRepo) QueryProjectFile(projectID uint) (string, error) {
 		return "", fmt.Errorf("QueryProjectFile(): %w, %v", domain.ErrQuery, err)
 	}
 	return filePath, nil
+}
+
+// QueryProjectInfo 根据项目ID查询项目所属的课程名、班级名、项目名
+func (p *ProjectRepo) QueryProjectInfo(projectID uint) (courseName, className, projectName string, err error) {
+	if p.db == nil {
+		return "", "", "", fmt.Errorf("QueryProjectInfo: invalid database connection")
+	}
+
+	query := fmt.Sprintf(
+		"select c.courseName, coff.className, pj.projectName "+
+			"from %s pj "+
+			"join %s coff on pj.offeringID = coff.offeringID "+
+			"join %s c on coff.courseID = c.courseID "+
+			"where pj.projectID = ?",
+		tabProject, tabCourseOffering, tabCourse)
+
+	err = p.db.QueryRow(query, projectID).Scan(&courseName, &className, &projectName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", "", fmt.Errorf("QueryProjectInfo(): %w", domain.ErrNotFound)
+		}
+		return "", "", "", fmt.Errorf("QueryProjectInfo(): %w, %v", domain.ErrQuery, err)
+	}
+	return courseName, className, projectName, nil
 }
 
 // ReportRepo 关于报告表的操作
