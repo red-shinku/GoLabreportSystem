@@ -25,10 +25,30 @@ type LoginUserInfo struct {
 	Number   string
 }
 
+// NewLoginUserInfo 创建LoginUserInfo实例
+func NewLoginUserInfo(identity uint8, number string) *LoginUserInfo {
+	return &LoginUserInfo{
+		Identity: identity,
+		Number:   number,
+	}
+}
+
+//===========================================
+// 结构化的视图，用于显示项目
+//===========================================
+
 // StudentProjectView 学生端的树状项目视图
 type StudentProjectView struct {
 	CourseName string
 	Projects   []ProjectItem
+}
+
+// NewStudentProjectView 创建StudentProjectView实例
+func NewStudentProjectView(courseName string) *StudentProjectView {
+	return &StudentProjectView{
+		CourseName: courseName,
+		Projects:   make([]ProjectItem, 0),
+	}
 }
 
 // TeacherProjectView 教师端的树状项目视图
@@ -37,9 +57,25 @@ type TeacherProjectView struct {
 	Classes    []ClassItem
 }
 
+// NewTeacherProjectView 创建TeacherProjectView实例
+func NewTeacherProjectView(courseName string) *TeacherProjectView {
+	return &TeacherProjectView{
+		CourseName: courseName,
+		Classes:    make([]ClassItem, 0),
+	}
+}
+
 type ClassItem struct {
 	ClassName string
 	Projects  []ProjectItem
+}
+
+// NewClassItem 创建ClassItem实例
+func NewClassItem(className string) *ClassItem {
+	return &ClassItem{
+		ClassName: className,
+		Projects:  make([]ProjectItem, 0),
+	}
 }
 
 type ProjectItem struct {
@@ -51,20 +87,50 @@ type ProjectItem struct {
 	SubmitStatus bool
 }
 
+// NewProjectItem 创建ProjectItem实例
+func NewProjectItem(projectName string, startTime, closeTime time.Time, projectID uint, submitStatus bool) *ProjectItem {
+	return &ProjectItem{
+		ProjectName:  projectName,
+		StartTime:    startTime,
+		CloseTime:    closeTime,
+		ProjectID:    projectID,
+		SubmitStatus: submitStatus,
+	}
+}
+
+//=============================================
+// 用于生成文件路径
+// 包含路径生成规则、以及安全检查
+//=============================================
+
 // StuReportMeta 学生报告业务元数据，包含所属课程等信息
 type StuReportMeta struct {
-	courseName  string
-	className   string
-	studentID   string
-	studentName string
-	projectName string
-	format      string
+	// 查数据库获取
+	CourseName  string
+	ClassName   string
+	StudentName string
+	ProjectName string
+	// 从表单获取
+	StudentID string
+	Format    string
+}
+
+// NewStuReportMeta 创建StuReportMeta实例
+func NewStuReportMeta(courseName, className, studentName, projectName, studentID, format string) *StuReportMeta {
+	return &StuReportMeta{
+		CourseName:  courseName,
+		ClassName:   className,
+		StudentName: studentName,
+		ProjectName: projectName,
+		StudentID:   studentID,
+		Format:      format,
+	}
 }
 
 // FilePath 返回安全的文件路径
 func (srm *StuReportMeta) FilePath() (string, error) {
-	filename := fmt.Sprintf("%s-%s-%s.%s", srm.studentID, srm.studentName, srm.projectName, srm.format)
-	path := filepath.Join(baseDir, srm.courseName, srm.className, srm.projectName, filename)
+	filename := fmt.Sprintf("%s-%s-%s.%s", srm.StudentID, srm.StudentName, srm.ProjectName, srm.Format)
+	path := filepath.Join(baseDir, srm.CourseName, srm.ClassName, srm.ProjectName, filename)
 	cleanPath := filepath.Clean(path)
 	if !strings.HasPrefix(cleanPath, baseDir+string(os.PathSeparator)) {
 		return "", fmt.Errorf("StuReportMeta(): path %w", ErrNotSafe)
@@ -74,7 +140,7 @@ func (srm *StuReportMeta) FilePath() (string, error) {
 
 // Check 检查文件格式
 func (srm *StuReportMeta) Check() error {
-	if _, ok := fileFmtSet[srm.format]; !ok {
+	if _, ok := fileFmtSet[srm.Format]; !ok {
 		return ErrNotAllow
 	}
 	return nil
@@ -82,18 +148,28 @@ func (srm *StuReportMeta) Check() error {
 
 // ProjectFileMeta 项目要求文件的业务元数据
 type ProjectFileMeta struct {
-	courseName  string
-	className   string
-	projectName string
-	fileName    string
+	CourseName  string
+	ClassName   string
+	ProjectName string
+	FileName    string
+}
+
+// NewProjectFileMeta 创建ProjectFileMeta实例
+func NewProjectFileMeta(courseName, className, projectName, fileName string) *ProjectFileMeta {
+	return &ProjectFileMeta{
+		CourseName:  courseName,
+		ClassName:   className,
+		ProjectName: projectName,
+		FileName:    fileName,
+	}
 }
 
 // FilePath 返回安全的文件路径
 func (pfm *ProjectFileMeta) FilePath() (string, error) {
-	path := filepath.Join(baseDir, pfm.courseName, pfm.className, pfm.projectName, pfm.fileName)
+	path := filepath.Join(baseDir, pfm.CourseName, pfm.ClassName, pfm.ProjectName, pfm.FileName)
 	cleanPath := filepath.Clean(path)
 	if !strings.HasPrefix(cleanPath, baseDir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("StuReportMeta(): path not save")
+		return "", fmt.Errorf("StuReportMeta(): path %w", ErrNotSafe)
 	}
 	return cleanPath, nil
 }

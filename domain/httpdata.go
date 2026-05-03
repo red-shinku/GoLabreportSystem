@@ -12,9 +12,30 @@ type ProjectForm struct {
 	CloseTime   time.Time
 }
 
+// NewProjectForm 创建ProjectForm实例
+func NewProjectForm(offeringID, projectID uint, projectName, fileName string, closeTime time.Time) *ProjectForm {
+	return &ProjectForm{
+		OfferingID:  offeringID,
+		ProjectID:   projectID,
+		ProjectName: projectName,
+		FileName:    fileName,
+		CloseTime:   closeTime,
+	}
+}
+
 type StuReportForm struct {
 	StudentID  string
 	ProjectID  uint
 	Format     string
 	SubmitTime time.Time
+}
+
+// NewStuReportForm 创建StuReportForm实例
+func NewStuReportForm(studentID string, projectID uint, format string, submitTime time.Time) *StuReportForm {
+	return &StuReportForm{
+		StudentID:  studentID,
+		ProjectID:  projectID,
+		Format:     format,
+		SubmitTime: submitTime,
+	}
 }

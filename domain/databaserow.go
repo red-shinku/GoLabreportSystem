@@ -25,6 +25,15 @@ type UserInfo struct {
 	Passwd   string
 }
 
+// NewUserInfo 创建UserInfo实例
+func NewUserInfo(identity uint8, number, passwd string) *UserInfo {
+	return &UserInfo{
+		Identity: identity,
+		Number:   number,
+		Passwd:   passwd,
+	}
+}
+
 // StudentProjectInfo 扁平化的学生项目列表查询结果，返回给上层
 type StudentProjectInfo struct {
 	CourseName  string
@@ -34,6 +43,19 @@ type StudentProjectInfo struct {
 	CloseTime   time.Time
 	IsActive    bool
 	StuReportID sql.NullInt32
+}
+
+// NewStudentProjectInfo 创建StudentProjectInfo实例
+func NewStudentProjectInfo(courseName string, projectID uint, projectName string, startTime, closeTime time.Time, isActive bool, stuReportID sql.NullInt32) *StudentProjectInfo {
+	return &StudentProjectInfo{
+		CourseName:  courseName,
+		ProjectID:   projectID,
+		ProjectName: projectName,
+		StartTime:   startTime,
+		CloseTime:   closeTime,
+		IsActive:    isActive,
+		StuReportID: stuReportID,
+	}
 }
 
 // TeacherProjectInfo 扁平化的教师管理项目列表，返回给上层
@@ -46,6 +68,18 @@ type TeacherProjectInfo struct {
 	IsActive    bool
 }
 
+// NewTeacherProjectInfo 创建TeacherProjectInfo实例
+func NewTeacherProjectInfo(courseName, className string, projectID uint, projectName string, closeTime time.Time, isActive bool) *TeacherProjectInfo {
+	return &TeacherProjectInfo{
+		CourseName:  courseName,
+		ClassName:   className,
+		ProjectID:   projectID,
+		ProjectName: projectName,
+		CloseTime:   closeTime,
+		IsActive:    isActive,
+	}
+}
+
 // ProjectInfo 要插入表中的项目信息单行数据
 type ProjectInfo struct {
 	OfferingID      uint
@@ -53,6 +87,17 @@ type ProjectInfo struct {
 	ProjectFilePath string
 	StartTime       time.Time
 	CloseTime       time.Time
+}
+
+// NewProjectInfo 创建ProjectInfo实例
+func NewProjectInfo(offeringID uint, projectName, projectFilePath string, startTime, closeTime time.Time) *ProjectInfo {
+	return &ProjectInfo{
+		OfferingID:      offeringID,
+		ProjectName:     projectName,
+		ProjectFilePath: projectFilePath,
+		StartTime:       startTime,
+		CloseTime:       closeTime,
+	}
 }
 
 type ProjectInfoBuilder struct {
@@ -117,12 +162,30 @@ type StuReportStatus struct {
 	StuReportID sql.NullInt32
 }
 
+// NewStuReportStatus 创建StuReportStatus实例
+func NewStuReportStatus(studentID string, stuReportID sql.NullInt32) *StuReportStatus {
+	return &StuReportStatus{
+		StudentID:   studentID,
+		StuReportID: stuReportID,
+	}
+}
+
 // StuReportInfo 要插入表中的学生报告信息单行数据
 type StuReportInfo struct {
 	StudentID      string
 	ProjectID      uint
 	ReportFilePath string
 	SubmitTime     time.Time
+}
+
+// NewStuReportInfo 创建StuReportInfo实例
+func NewStuReportInfo(studentID string, projectID uint, reportFilePath string, submitTime time.Time) *StuReportInfo {
+	return &StuReportInfo{
+		StudentID:      studentID,
+		ProjectID:      projectID,
+		ReportFilePath: reportFilePath,
+		SubmitTime:     submitTime,
+	}
 }
 
 //type StuReportInfoBuilder struct {
@@ -167,4 +230,12 @@ type StuReportInfo struct {
 type StudentCourseInfo struct {
 	StudentID  string
 	OfferingID uint
+}
+
+// NewStudentCourseInfo 创建StudentCourseInfo实例
+func NewStudentCourseInfo(studentID string, offeringID uint) *StudentCourseInfo {
+	return &StudentCourseInfo{
+		StudentID:  studentID,
+		OfferingID: offeringID,
+	}
 }
