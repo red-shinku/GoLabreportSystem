@@ -24,19 +24,19 @@ type authOp interface {
 	WhoAmI(number string) (uint8, error)
 }
 
-func (as *AuthService) LoginAuth(number string, passwd string) (domain.LoginUserInfo, error) {
+func (as *AuthService) LoginAuth(number string, passwd string) (*domain.LoginUserInfo, error) {
 	correctPasswd, err := as.repoAuth.QueryPasswd(number)
 	if err != nil {
-		return domain.LoginUserInfo{}, err
+		return nil, err
 	}
 	if correctPasswd != passwd {
-		return domain.LoginUserInfo{}, domain.ErrAuth
+		return nil, domain.ErrAuth
 	}
 	id, errW := as.repoAuth.WhoAmI(number)
 	if errW != nil {
-		return domain.LoginUserInfo{}, errW
+		return nil, errW
 	}
-	return domain.LoginUserInfo{id, number}, nil
+	return domain.NewLoginUserInfo(id, number), nil
 }
 
 //=========================================================
@@ -122,21 +122,15 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	var result []domain.StudentProjectView
 	indexMap := make(map[string]int)
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.ProjectItem{
-			ProjectName:  rowInfo.ProjectName,
-			StartTime:    rowInfo.StartTime,
-			CloseTime:    rowInfo.CloseTime,
-			ProjectID:    rowInfo.ProjectID,
-			SubmitStatus: rowInfo.StuReportID.Valid,
-		}
+		pj := domain.NewProjectItem(rowInfo.ProjectName, rowInfo.StartTime, rowInfo.CloseTime, rowInfo.ProjectID, rowInfo.StuReportID.Valid)
 		// 若解析过该课程名，将项目归到其下
 		if idx, ok := indexMap[rowInfo.CourseName]; ok {
-			result[idx].Projects = append(result[idx].Projects, pj)
+			result[idx].Projects = append(result[idx].Projects, *pj)
 		} else {
-			newCourse := domain.StudentProjectView{CourseName: rowInfo.CourseName}
-			newCourse.Projects = append(newCourse.Projects, pj)
+			newCourse := domain.NewStudentProjectView(rowInfo.CourseName)
+			newCourse.Projects = append(newCourse.Projects, *pj)
 			indexMap[rowInfo.CourseName] = len(result)
-			result = append(result, newCourse)
+			result = append(result, *newCourse)
 		}
 	}
 	return result
@@ -168,31 +162,27 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 	classIndexMap := make(map[string]map[string]int)
 
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.ProjectItem{
-			ProjectName: rowInfo.ProjectName,
-			CloseTime:   rowInfo.CloseTime,
-			ProjectID:   rowInfo.ProjectID,
-		}
+		pj := domain.NewProjectItem(rowInfo.ProjectName, time.Time{}, rowInfo.CloseTime, rowInfo.ProjectID, false)
 		if courseIdx, ok := courseIndexMap[rowInfo.CourseName]; ok {
 			if classIdxMap, ok := classIndexMap[rowInfo.CourseName]; ok {
 				if classIdx, ok := classIdxMap[rowInfo.ClassName]; ok {
-					result[courseIdx].Classes[classIdx].Projects = append(result[courseIdx].Classes[classIdx].Projects, pj)
+					result[courseIdx].Classes[classIdx].Projects = append(result[courseIdx].Classes[classIdx].Projects, *pj)
 				} else {
-					newClass := domain.ClassItem{ClassName: rowInfo.ClassName}
-					newClass.Projects = append(newClass.Projects, pj)
+					newClass := domain.NewClassItem(rowInfo.ClassName)
+					newClass.Projects = append(newClass.Projects, *pj)
 					classIdxMap[rowInfo.ClassName] = len(result[courseIdx].Classes)
-					result[courseIdx].Classes = append(result[courseIdx].Classes, newClass)
+					result[courseIdx].Classes = append(result[courseIdx].Classes, *newClass)
 				}
 			}
 		} else {
-			newClass := domain.ClassItem{ClassName: rowInfo.ClassName}
-			newClass.Projects = append(newClass.Projects, pj)
-			newCourse := domain.TeacherProjectView{CourseName: rowInfo.CourseName}
-			newCourse.Classes = append(newCourse.Classes, newClass)
+			newClass := domain.NewClassItem(rowInfo.ClassName)
+			newClass.Projects = append(newClass.Projects, *pj)
+			newCourse := domain.NewTeacherProjectView(rowInfo.CourseName)
+			newCourse.Classes = append(newCourse.Classes, *newClass)
 			courseIndexMap[rowInfo.CourseName] = len(result)
 			classIndexMap[rowInfo.CourseName] = make(map[string]int)
 			classIndexMap[rowInfo.CourseName][rowInfo.ClassName] = 0
-			result = append(result, newCourse)
+			result = append(result, *newCourse)
 		}
 	}
 	return result
@@ -204,12 +194,7 @@ func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.Pro
 	if err != nil {
 		return err
 	}
-	meta := &domain.ProjectFileMeta{
-		CourseName:  courseName,
-		ClassName:   className,
-		ProjectName: projectName,
-		FileName:    form.FileName,
-	}
+	meta := domain.NewProjectFileMeta(courseName, className, projectName, form.FileName)
 	if err := tp.fs.SaveFile(r, meta); err != nil {
 		return err
 	}
@@ -373,24 +358,12 @@ func (sr *StudentReportService) genStuReportData(form *domain.StuReportForm) (*d
 	if err != nil {
 		return nil, nil, err
 	}
-	meta := &domain.StuReportMeta{
-		CourseName:  courseName,
-		ClassName:   className,
-		StudentID:   form.StudentID,
-		StudentName: studentName,
-		ProjectName: projectName,
-		Format:      form.Format,
-	}
+	meta := domain.NewStuReportMeta(courseName, className, studentName, projectName, form.StudentID, form.Format)
 	filePath, err := meta.FilePath()
 	if err != nil {
 		return nil, nil, err
 	}
-	info := &domain.StuReportInfo{
-		StudentID:      form.StudentID,
-		ProjectID:      form.ProjectID,
-		ReportFilePath: filePath,
-		SubmitTime:     time.Now(),
-	}
+	info := domain.NewStuReportInfo(form.StudentID, form.ProjectID, filePath, time.Now())
 	return meta, info, nil
 }
 
