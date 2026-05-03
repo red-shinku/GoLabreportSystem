@@ -4,8 +4,14 @@ package server
 
 import (
 	"LabSystem/domain"
+	"io"
 	"time"
 )
+
+//=========================================================
+//	关于认证相关的业务，目前有：
+//	登录认证
+//=========================================================
 
 // AuthService 负责认证相关业务，包括登录认证等
 type AuthService struct {
@@ -33,6 +39,11 @@ func (as *AuthService) LoginAuth(number string, passwd string) (domain.LoginUser
 	return domain.LoginUserInfo{id, number}, nil
 }
 
+//=========================================================
+//	关于用户相关的业务，目前有：
+//	批量注册
+//=========================================================
+
 // UserService 负责用户信息相关业务，包括注册、修改资料等
 type UserService struct {
 	repoRegister registerOp
@@ -50,16 +61,31 @@ func (u *UserService) RegisterUsersBatch(users *[]domain.UserInfo) error {
 	return nil
 }
 
+//=========================================================
+//	关于项目相关的业务，分为教师端与学生端。目前有：
+//	教师端：
+//	1) 生成教师项目视图
+//	2) 新建项目（需要同时上传项目文件）
+//	3) 重传项目文件
+//	4) 修改项目开启状态
+//	5) 删除项目（同时删除文件
+//	学生端：
+//	1) 生成学生项目视图
+//	2) 获取项目文件
+//=========================================================
+
 // TeacherProjectService 负责教师端项目相关的业务，如增删、开启关闭
 type TeacherProjectService struct {
 	repoTecProject teacherProjectOp
 	repoPubProject publicProjectOp
+	fs             *FileService
 }
 
 // StudentProjectService 负责学生端项目相关的业务，如查询、下载要求
 type StudentProjectService struct {
 	repoStuProject studentProjectOp
 	repoPubProject publicProjectOp
+	fs             *FileService
 }
 
 // teacherProjectOp 教师操作项目的接口
@@ -80,6 +106,7 @@ type studentProjectOp interface {
 type publicProjectOp interface {
 	QueryProjectFile(projectID uint) (string, error)
 	QueryProjectFlag(projectID uint) (bool, error)
+	QueryProjectInfo(projectID uint) (courseName, className, projectName string, err error)
 }
 
 // ListProject 列出学生的项目列表，返回树状结构，包含课程、项目的层次信息
@@ -116,8 +143,9 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	//FIXME: 处理可能的panic？
 }
 
-// GetProjectFilePath 返回要下载的文件路径
-func (sp *StudentProjectService) GetProjectFilePath(projectID uint) (string, error) {
+// DownloadProjectFile 返回要下载的文件路径
+func (sp *StudentProjectService) DownloadProjectFile(projectID uint) (string, error) {
+	//FIXME: 文件操作
 	path, err := sp.repoPubProject.QueryProjectFile(projectID)
 	if err != nil {
 		return "", err
@@ -170,20 +198,67 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 	return result
 }
 
-// ChangeProjectFilePath 教师重传项目文件后更改路径信息
-func (tp *TeacherProjectService) ChangeProjectFilePath(projectID uint, path string) error {
-	if err := tp.repoTecProject.UpdateProjectFile(projectID, path); err != nil {
+// UploadProjectFile 教师上传/重传项目文件后更改路径信息
+func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.ProjectForm) error {
+	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(form.ProjectID)
+	if err != nil {
+		return err
+	}
+	meta := &domain.ProjectFileMeta{
+		CourseName:  courseName,
+		ClassName:   className,
+		ProjectName: projectName,
+		FileName:    form.FileName,
+	}
+	if err := tp.fs.SaveFile(r, meta); err != nil {
+		return err
+	}
+	path, _ := meta.FilePath()
+	if err := tp.repoTecProject.UpdateProjectFile(form.ProjectID, path); err != nil {
 		return err
 	}
 	return nil
 }
 
 // CreateProject 教师新建项目
-func (tp *TeacherProjectService) CreateProject(pjInfo *domain.ProjectInfo) error {
-	if err := tp.repoTecProject.AddProject(pjInfo); err != nil {
+func (tp *TeacherProjectService) CreateProject(r io.Reader, form *domain.ProjectForm) error {
+	meta, info, err := tp.genProjectData(form)
+	if err != nil {
+		return err
+	}
+	//FIXME: 协程+绑定SQL事务
+	if err := tp.fs.SaveFile(r, meta); err != nil {
+		return err
+	}
+	if err := tp.repoTecProject.AddProject(info); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (tp *TeacherProjectService) genProjectData(form *domain.ProjectForm) (*domain.ProjectFileMeta, *domain.ProjectInfo, error) {
+	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(form.ProjectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	meta := &domain.ProjectFileMeta{
+		ProjectName: projectName,
+		CourseName:  courseName,
+		ClassName:   className,
+		FileName:    form.FileName,
+	}
+	filePath, err := meta.FilePath()
+	if err != nil {
+		return nil, nil, err
+	}
+	info := &domain.ProjectInfo{
+		OfferingID:      form.OfferingID,
+		ProjectName:     projectName,
+		ProjectFilePath: filePath,
+		StartTime:       time.Now(),
+		CloseTime:       form.CloseTime,
+	}
+	return meta, info, nil
 }
 
 // ChangeProjectStatus 开启/关闭项目
@@ -201,20 +276,34 @@ func (tp *TeacherProjectService) ChangeProjectStatus(projectID uint) error {
 
 // DeleteProject 删除项目
 func (tp *TeacherProjectService) DeleteProject(projectID uint) error {
+	//FIXME: 同时清除文件
 	if err := tp.repoTecProject.DelProject(projectID); err != nil {
 		return err
 	}
 	return nil
 }
 
+//=========================================================
+//	关于实验报告相关的业务，分为学生端与教师端，目前有：
+//	教师端：
+// 	1) 获取学生完成情况
+//	2) 批量下载学生报告
+//	学生端：
+//	1) 上传报告文件
+//=========================================================
+
 // TeacherReportService 教师端实验报告相关业务
 type TeacherReportService struct {
 	repoTecReport teacherReportOp
+	fs            *FileService
 }
 
 // StudentReportService 学生端实验报告相关的业务、如上传、下载、检查等
 type StudentReportService struct {
 	repoStuReport studentReportOp
+	repoProject   projectInfoOp
+	repoUser      studentInfoOp
+	fs            *FileService
 }
 
 type teacherReportOp interface {
@@ -226,6 +315,14 @@ type studentReportOp interface {
 	InsertStuReport(stuRp *domain.StuReportInfo) error
 }
 
+type projectInfoOp interface {
+	QueryProjectInfo(projectID uint) (courseName, className, projectName string, err error)
+}
+
+type studentInfoOp interface {
+	QueryStudentName(studentID string) (string, error)
+}
+
 // CheckStuReportStatus 教师检查学生完成情况
 func (tr *TeacherReportService) CheckStuReportStatus(projectID uint) ([]domain.StuReportStatus, error) {
 	result, err := tr.repoTecReport.QueryStuReportStatus(projectID)
@@ -235,8 +332,9 @@ func (tr *TeacherReportService) CheckStuReportStatus(projectID uint) ([]domain.S
 	return result, nil
 }
 
-// GetStuReportFilePath 获取要下载的学生报告文件路径
-func (tr *TeacherReportService) GetStuReportFilePath(projectID uint) ([]string, error) {
+// DownloadStuReportBatch 获取要下载的学生报告文件路径
+func (tr *TeacherReportService) DownloadStuReportBatch(projectID uint) ([]string, error) {
+	//FIXME: 如何提供批量下载？
 	result, err := tr.repoTecReport.QueryStuReportFileAll(projectID)
 	if err != nil {
 		return []string{}, err
@@ -244,14 +342,62 @@ func (tr *TeacherReportService) GetStuReportFilePath(projectID uint) ([]string, 
 	return result, nil
 }
 
-// AddStuReport 学生添加报告
-func (sr *StudentReportService) AddStuReport(stuRp *domain.StuReportInfo) error {
-	stuRp.SubmitTime = time.Now()
-	if err := sr.repoStuReport.InsertStuReport(stuRp); err != nil {
+// UploadStuReport 学生上传报告
+func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportForm) error {
+	//FIXME : 可以启用两个协程完成
+	meta, info, err := sr.genStuReportData(form)
+	if err != nil {
+		return err
+	}
+	if err := meta.Check(); err != nil {
+		return err
+	}
+
+	if err := sr.fs.SaveFile(r, meta); err != nil {
+		return err
+	}
+	//FIXME: 开启事务
+	if err := sr.repoStuReport.InsertStuReport(info); err != nil {
 		return err
 	}
 	return nil
 }
+
+// genStuReportData 生成学生报告业务元数据
+func (sr *StudentReportService) genStuReportData(form *domain.StuReportForm) (*domain.StuReportMeta, *domain.StuReportInfo, error) {
+	courseName, className, projectName, err := sr.repoProject.QueryProjectInfo(form.ProjectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	studentName, err := sr.repoUser.QueryStudentName(form.StudentID)
+	if err != nil {
+		return nil, nil, err
+	}
+	meta := &domain.StuReportMeta{
+		CourseName:  courseName,
+		ClassName:   className,
+		StudentID:   form.StudentID,
+		StudentName: studentName,
+		ProjectName: projectName,
+		Format:      form.Format,
+	}
+	filePath, err := meta.FilePath()
+	if err != nil {
+		return nil, nil, err
+	}
+	info := &domain.StuReportInfo{
+		StudentID:      form.StudentID,
+		ProjectID:      form.ProjectID,
+		ReportFilePath: filePath,
+		SubmitTime:     time.Now(),
+	}
+	return meta, info, nil
+}
+
+//=========================================================
+//	关于课程相关的业务，目前有：
+//	批量添加学生选课
+//=========================================================
 
 // CourseService 课程相关业务，如批量导入选课信息
 type CourseService struct {
@@ -269,5 +415,3 @@ func (c *CourseService) RegisterStuCourseOfferBatch(stuCourseOffer *[]domain.Stu
 	}
 	return nil
 }
-
-//TODO: 文件格式、存储服务（文件系统IO）？
