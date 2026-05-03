@@ -137,14 +137,17 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	//FIXME: 处理可能的panic？
 }
 
-// DownloadProjectFile 返回要下载的文件路径
-func (sp *StudentProjectService) DownloadProjectFile(projectID uint) (string, error) {
-	//FIXME: 文件操作
+// DownloadProjectFile 客户下载项目要求文件
+func (sp *StudentProjectService) DownloadProjectFile(w io.Writer, projectID uint) error {
 	path, err := sp.repoPubProject.QueryProjectFile(projectID)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return path, nil
+
+	if err := sp.fs.LoadFile(w, path); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ListProject 列出教师管理的项目列表，返回树状结构，包含课程、班级、项目的层次信息
@@ -259,9 +262,16 @@ func (tp *TeacherProjectService) ChangeProjectStatus(projectID uint) error {
 	return nil
 }
 
-// DeleteProject 删除项目
+// DeleteProject 删除项目，并清除相关文件
 func (tp *TeacherProjectService) DeleteProject(projectID uint) error {
-	//FIXME: 同时清除文件
+	//FIXME: 文件删除与数据库事务绑定
+	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(projectID)
+	if err != nil {
+		return err
+	}
+	if err := tp.fs.DeleteDirectory(domain.NewProjectFileMeta(courseName, className, projectName, projectName)); err != nil {
+		return err
+	}
 	if err := tp.repoTecProject.DelProject(projectID); err != nil {
 		return err
 	}
@@ -317,19 +327,19 @@ func (tr *TeacherReportService) CheckStuReportStatus(projectID uint) ([]domain.S
 	return result, nil
 }
 
-// DownloadStuReportBatch 获取要下载的学生报告文件路径
-func (tr *TeacherReportService) DownloadStuReportBatch(projectID uint) ([]string, error) {
-	//FIXME: 如何提供批量下载？
+// DownloadStuReportBatch 客户打包下载的学生报告文件
+func (tr *TeacherReportService) DownloadStuReportBatch(w io.Writer, projectID uint) error {
 	result, err := tr.repoTecReport.QueryStuReportFileAll(projectID)
 	if err != nil {
-		return []string{}, err
+		return err
 	}
-	return result, nil
+	tr.fs.LoadFileBatch(w, domain.NewTargetPaths(result))
+	return nil
 }
 
 // UploadStuReport 学生上传报告
 func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportForm) error {
-	//FIXME : 可以启用两个协程完成
+	//TODO : 启用两个协程完成 ?
 	meta, info, err := sr.genStuReportData(form)
 	if err != nil {
 		return err
