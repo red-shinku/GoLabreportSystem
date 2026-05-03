@@ -11,9 +11,11 @@ import (
 
 var ErrAuth = errors.New("failed to auth")
 
+// 用于文件业务（与文件系统操作相关）的标记错误
 var (
 	ErrNotSafe  = errors.New("not safe")
 	ErrNotAllow = errors.New("not allow")
+	ErrNotExist = errors.New("not exist")
 )
 
 const baseDir string = "./files"
@@ -167,9 +169,53 @@ func NewProjectFileMeta(courseName, className, projectName, fileName string) *Pr
 // FilePath 返回安全的文件路径
 func (pfm *ProjectFileMeta) FilePath() (string, error) {
 	path := filepath.Join(baseDir, pfm.CourseName, pfm.ClassName, pfm.ProjectName, pfm.FileName)
+	cleanpath, err := pfm.cleanPath(path)
+	if err != nil {
+		return "", err
+	}
+	return cleanpath, nil
+}
+
+func (pfm *ProjectFileMeta) DirectoryPath() (string, error) {
+	path := filepath.Join(baseDir, pfm.CourseName, pfm.ClassName, pfm.ProjectName)
+	cleanpath, err := pfm.cleanPath(path)
+	if err != nil {
+		return "", err
+	}
+	return cleanpath, nil
+}
+
+func (pfm *ProjectFileMeta) cleanPath(path string) (string, error) {
 	cleanPath := filepath.Clean(path)
 	if !strings.HasPrefix(cleanPath, baseDir+string(os.PathSeparator)) {
 		return "", fmt.Errorf("StuReportMeta(): path %w", ErrNotSafe)
 	}
 	return cleanPath, nil
+}
+
+type TargetPaths struct {
+	paths []string
+	count int
+	cur   int
+}
+
+func NewTargetPaths(paths []string) *TargetPaths {
+	return &TargetPaths{
+		paths: paths,
+		count: len(paths),
+		cur:   0,
+	}
+}
+
+func (t *TargetPaths) Next() string {
+	if t.cur < t.count {
+		index := t.cur
+		t.cur++
+		return t.paths[index]
+	}
+	return ""
+}
+
+func (t *TargetPaths) HasNext() bool {
+	return t.cur < t.count
 }
