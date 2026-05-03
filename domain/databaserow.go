@@ -55,6 +55,62 @@ type ProjectInfo struct {
 	CloseTime       time.Time
 }
 
+type ProjectInfoBuilder struct {
+	offeringID      uint
+	projectName     string
+	projectFilePath string
+	startTime       time.Time
+	closeTime       time.Time
+}
+
+//func NewProjectInfoBuilder() *ProjectInfoBuilder {
+//	return &ProjectInfoBuilder{}
+//}
+//
+//func (pb *ProjectInfoBuilder) SetOfferingID(id uint) *ProjectInfoBuilder {
+//	pb.offeringID = id
+//	return pb
+//}
+//
+//func (pb *ProjectInfoBuilder) SetProjectName(name string) *ProjectInfoBuilder {
+//	pb.projectName = name
+//	return pb
+//}
+//
+//func (pb *ProjectInfoBuilder) SetProjectFilePath(path string) *ProjectInfoBuilder {
+//	pb.projectFilePath = path
+//	return pb
+//}
+//
+//func (pb *ProjectInfoBuilder) SetStartTime(startTime time.Time) *ProjectInfoBuilder {
+//	pb.startTime = startTime
+//	return pb
+//}
+//
+//func (pb *ProjectInfoBuilder) SetCloseTime(closeTime time.Time) *ProjectInfoBuilder {
+//	pb.closeTime = closeTime
+//	return pb
+//}
+//
+//func (pb *ProjectInfoBuilder) Build() (*ProjectInfo, error) {
+//	if pb.projectFilePath == "" {
+//		return nil, fmt.Errorf("ProjectInfo Bilder: projectFilePath is empty")
+//	}
+//	if pb.projectName == "" {
+//		return nil, fmt.Errorf("ProjectInfo Bilder: projectName is empty")
+//	}
+//	if pb.closeTime.IsZero() {
+//		return nil, fmt.Errorf("ProjectInfo Bilder: closeTime is empty")
+//	}
+//	return &ProjectInfo{
+//		OfferingID:      pb.offeringID,
+//		ProjectName:     pb.projectName,
+//		ProjectFilePath: pb.projectFilePath,
+//		StartTime:       pb.startTime,
+//		CloseTime:       pb.closeTime,
+//	}, nil
+//}
+
 // StuReportStatus 一个项目中学生的完成情况
 type StuReportStatus struct {
 	StudentID   string
@@ -68,6 +124,44 @@ type StuReportInfo struct {
 	ReportFilePath string
 	SubmitTime     time.Time
 }
+
+//type StuReportInfoBuilder struct {
+//	StudentID      string
+//	ProjectID      uint
+//	ReportFilePath string
+//	SubmitTime     time.Time
+//}
+//
+//func NewStuReportInfoBuilder() *StuReportInfoBuilder {
+//	return &StuReportInfoBuilder{}
+//}
+//
+//func (pb *StuReportInfoBuilder) SetStudentID(id string) *StuReportInfoBuilder {
+//	pb.StudentID = id
+//	return pb
+//}
+//
+//func (pb *StuReportInfoBuilder) SetProjectID(id uint) *StuReportInfoBuilder {
+//	pb.ProjectID = id
+//	return pb
+//}
+//
+//func (pb *StuReportInfoBuilder) SetReportFilePath(path string) *StuReportInfoBuilder {
+//	pb.ReportFilePath = path
+//	return pb
+//}
+//
+//func (pb *StuReportInfoBuilder) Build() (*StuReportInfo, error) {
+//	if pb.ReportFilePath == "" {
+//		return nil, fmt.Errorf("StuReportInfo Builder: ReportFilePath is empty")
+//	}
+//	return &StuReportInfo{
+//		StudentID:      pb.StudentID,
+//		ProjectID:      pb.ProjectID,
+//		ReportFilePath: pb.ReportFilePath,
+//		SubmitTime:     pb.SubmitTime,
+//	}, nil
+//}
 
 // StudentCourseInfo 扁平化的学生选课信息
 type StudentCourseInfo struct {
