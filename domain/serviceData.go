@@ -36,20 +36,33 @@ func NewLoginUserInfo(identity uint8, number string) *LoginUserInfo {
 }
 
 //===========================================
-// 结构化的视图，用于显示项目
+// 结构化的视图，在业务层生成并返回给上层
+// 上层使用该类结构生成新的、包含相关URL的结构类型的实例
 //===========================================
 
 // StudentProjectView 学生端的树状项目视图
 type StudentProjectView struct {
 	CourseName string
-	Projects   []ProjectItem
+	Projects   []ProjectStuItem
 }
 
 // NewStudentProjectView 创建StudentProjectView实例
 func NewStudentProjectView(courseName string) *StudentProjectView {
 	return &StudentProjectView{
 		CourseName: courseName,
-		Projects:   make([]ProjectItem, 0),
+		Projects:   make([]ProjectStuItem, 0),
+	}
+}
+
+type ProjectStuItem struct {
+	*ProjectItem
+	SubmitStatus bool
+}
+
+func NewProjectStuItem(projectName string, startTime, closeTime time.Time, projectID uint, sbStatus bool) *ProjectStuItem {
+	return &ProjectStuItem{
+		ProjectItem:  NewProjectItem(projectName, startTime, closeTime, projectID),
+		SubmitStatus: sbStatus,
 	}
 }
 
@@ -69,14 +82,24 @@ func NewTeacherProjectView(courseName string) *TeacherProjectView {
 
 type ClassItem struct {
 	ClassName string
-	Projects  []ProjectItem
+	Projects  []ProjectTecItem
 }
 
 // NewClassItem 创建ClassItem实例
 func NewClassItem(className string) *ClassItem {
 	return &ClassItem{
 		ClassName: className,
-		Projects:  make([]ProjectItem, 0),
+		Projects:  make([]ProjectTecItem, 0),
+	}
+}
+
+type ProjectTecItem struct {
+	*ProjectItem
+}
+
+func NewProjectTecItem(projectName string, startTime, closeTime time.Time, projectID uint) *ProjectTecItem {
+	return &ProjectTecItem{
+		NewProjectItem(projectName, startTime, closeTime, projectID),
 	}
 }
 
@@ -85,18 +108,15 @@ type ProjectItem struct {
 	StartTime   time.Time
 	CloseTime   time.Time
 	ProjectID   uint
-	// 用于学生端显示提交状态
-	SubmitStatus bool
 }
 
 // NewProjectItem 创建ProjectItem实例
-func NewProjectItem(projectName string, startTime, closeTime time.Time, projectID uint, submitStatus bool) *ProjectItem {
+func NewProjectItem(projectName string, startTime, closeTime time.Time, projectID uint) *ProjectItem {
 	return &ProjectItem{
-		ProjectName:  projectName,
-		StartTime:    startTime,
-		CloseTime:    closeTime,
-		ProjectID:    projectID,
-		SubmitStatus: submitStatus,
+		ProjectName: projectName,
+		StartTime:   startTime,
+		CloseTime:   closeTime,
+		ProjectID:   projectID,
 	}
 }
 
