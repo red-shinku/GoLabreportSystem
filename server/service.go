@@ -107,6 +107,7 @@ type publicProjectOp interface {
 	QueryProjectFile(projectID uint) (string, error)
 	QueryProjectFlag(projectID uint) (bool, error)
 	QueryProjectInfo(projectID uint) (courseName, className, projectName string, err error)
+	QueryOfferingInfo(offeringID uint) (courseName, className string, err error)
 }
 
 // ListProject 列出学生的项目列表，返回树状结构，包含课程、项目的层次信息
@@ -122,7 +123,7 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	var result []domain.StudentProjectView
 	indexMap := make(map[string]int)
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.NewProjectItem(rowInfo.ProjectName, rowInfo.StartTime, rowInfo.CloseTime, rowInfo.ProjectID, rowInfo.StuReportID.Valid)
+		pj := domain.NewProjectStuItem(rowInfo.ProjectName, rowInfo.StartTime, rowInfo.CloseTime, rowInfo.ProjectID, rowInfo.StuReportID.Valid)
 		// 若解析过该课程名，将项目归到其下
 		if idx, ok := indexMap[rowInfo.CourseName]; ok {
 			result[idx].Projects = append(result[idx].Projects, *pj)
@@ -165,7 +166,7 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 	classIndexMap := make(map[string]map[string]int)
 
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.NewProjectItem(rowInfo.ProjectName, time.Time{}, rowInfo.CloseTime, rowInfo.ProjectID, false)
+		pj := domain.NewProjectTecItem(rowInfo.ProjectName, time.Time{}, rowInfo.CloseTime, rowInfo.ProjectID)
 		if courseIdx, ok := courseIndexMap[rowInfo.CourseName]; ok {
 			if classIdxMap, ok := classIndexMap[rowInfo.CourseName]; ok {
 				if classIdx, ok := classIdxMap[rowInfo.ClassName]; ok {
@@ -192,7 +193,7 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 }
 
 // UploadProjectFile 教师上传/重传项目文件后更改路径信息
-func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.ProjectForm) error {
+func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.ProjectFileForm) error {
 	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(form.ProjectID)
 	if err != nil {
 		return err
@@ -225,12 +226,12 @@ func (tp *TeacherProjectService) CreateProject(r io.Reader, form *domain.Project
 }
 
 func (tp *TeacherProjectService) genProjectData(form *domain.ProjectForm) (*domain.ProjectFileMeta, *domain.ProjectInfo, error) {
-	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(form.ProjectID)
+	courseName, className, err := tp.repoPubProject.QueryOfferingInfo(form.OfferingID)
 	if err != nil {
 		return nil, nil, err
 	}
 	meta := &domain.ProjectFileMeta{
-		ProjectName: projectName,
+		ProjectName: form.ProjectName,
 		CourseName:  courseName,
 		ClassName:   className,
 		FileName:    form.FileName,
@@ -241,7 +242,7 @@ func (tp *TeacherProjectService) genProjectData(form *domain.ProjectForm) (*doma
 	}
 	info := &domain.ProjectInfo{
 		OfferingID:      form.OfferingID,
-		ProjectName:     projectName,
+		ProjectName:     form.ProjectName,
 		ProjectFilePath: filePath,
 		StartTime:       time.Now(),
 		CloseTime:       form.CloseTime,
