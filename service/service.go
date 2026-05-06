@@ -221,44 +221,17 @@ func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.Pro
 }
 
 // CreateProject 教师新建项目
-func (tp *TeacherProjectService) CreateProject(r io.Reader, form *domain.ProjectForm) error {
-	meta, info, err := tp.genProjectData(form)
-	if err != nil {
-		return err
-	}
-	//FIXME: 协程+绑定SQL事务
-	if err := tp.fs.SaveFile(r, meta); err != nil {
-		return err
-	}
+func (tp *TeacherProjectService) CreateProject(form *domain.ProjectForm) error {
+	info := domain.NewProjectInfo(
+		form.OfferingID,
+		form.ProjectName,
+		"",
+		time.Now(),
+		form.CloseTime)
 	if err := tp.repoTecProject.AddProject(info); err != nil {
 		return err
 	}
 	return nil
-}
-
-func (tp *TeacherProjectService) genProjectData(form *domain.ProjectForm) (*domain.ProjectFileMeta, *domain.ProjectInfo, error) {
-	courseName, className, err := tp.repoPubProject.QueryOfferingInfo(form.OfferingID)
-	if err != nil {
-		return nil, nil, err
-	}
-	meta := &domain.ProjectFileMeta{
-		ProjectName: form.ProjectName,
-		CourseName:  courseName,
-		ClassName:   className,
-		FileName:    form.FileName,
-	}
-	filePath, err := meta.FilePath()
-	if err != nil {
-		return nil, nil, err
-	}
-	info := &domain.ProjectInfo{
-		OfferingID:      form.OfferingID,
-		ProjectName:     form.ProjectName,
-		ProjectFilePath: filePath,
-		StartTime:       time.Now(),
-		CloseTime:       form.CloseTime,
-	}
-	return meta, info, nil
 }
 
 // ChangeProjectStatus 开启/关闭项目
