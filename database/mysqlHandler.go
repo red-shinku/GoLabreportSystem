@@ -178,6 +178,22 @@ func (p *ProjectRepo) QueryProjectFlag(projectID uint) (bool, error) {
 	return flag, nil
 }
 
+// QueryOfferingInfo 通过OfferingID查询课程名和班级名，用于新建项目时获取文件路径信息
+func (p *ProjectRepo) QueryOfferingInfo(offeringID uint) (courseName, className string, err error) {
+	query := fmt.Sprintf("select c.courseName, coff.className "+
+		"from %s coff "+
+		"join %s c on coff.courseID = c.courseID "+
+		"where coff.offeringID = ?",
+		tabCourseOffering, tabCourse)
+	if err := p.db.QueryRow(query, offeringID).Scan(&courseName, &className); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", fmt.Errorf("QueryOfferingInfo(): %w", domain.ErrNotFound)
+		}
+		return "", "", fmt.Errorf("QueryOfferingInfo(): %w, %v", domain.ErrQuery, err)
+	}
+	return courseName, className, nil
+}
+
 // AddProject 教师新建项目
 func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 	if p.db == nil || project == nil {
