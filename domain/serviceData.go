@@ -59,9 +59,9 @@ type ProjectStuItem struct {
 	SubmitStatus bool
 }
 
-func NewProjectStuItem(projectName string, startTime, closeTime time.Time, projectID uint, sbStatus bool) *ProjectStuItem {
+func NewProjectStuItem(projectName string, startTime, closeTime time.Time, isActive bool, projectID uint, sbStatus bool) *ProjectStuItem {
 	return &ProjectStuItem{
-		ProjectItem:  NewProjectItem(projectName, startTime, closeTime, projectID),
+		ProjectItem:  NewProjectItem(projectName, startTime, closeTime, isActive, projectID),
 		SubmitStatus: sbStatus,
 	}
 }
@@ -97,9 +97,9 @@ type ProjectTecItem struct {
 	*ProjectItem
 }
 
-func NewProjectTecItem(projectName string, startTime, closeTime time.Time, projectID uint) *ProjectTecItem {
+func NewProjectTecItem(projectName string, startTime, closeTime time.Time, isActive bool, projectID uint) *ProjectTecItem {
 	return &ProjectTecItem{
-		NewProjectItem(projectName, startTime, closeTime, projectID),
+		NewProjectItem(projectName, startTime, closeTime, isActive, projectID),
 	}
 }
 
@@ -107,15 +107,17 @@ type ProjectItem struct {
 	ProjectName string
 	StartTime   time.Time
 	CloseTime   time.Time
+	IsActive    bool
 	ProjectID   uint
 }
 
 // NewProjectItem 创建ProjectItem实例
-func NewProjectItem(projectName string, startTime, closeTime time.Time, projectID uint) *ProjectItem {
+func NewProjectItem(projectName string, startTime, closeTime time.Time, isActive bool, projectID uint) *ProjectItem {
 	return &ProjectItem{
 		ProjectName: projectName,
 		StartTime:   startTime,
 		CloseTime:   closeTime,
+		IsActive:    isActive,
 		ProjectID:   projectID,
 	}
 }

@@ -123,7 +123,13 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	var result []domain.StudentProjectView
 	indexMap := make(map[string]int)
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.NewProjectStuItem(rowInfo.ProjectName, rowInfo.StartTime, rowInfo.CloseTime, rowInfo.ProjectID, rowInfo.StuReportID.Valid)
+		pj := domain.NewProjectStuItem(
+			rowInfo.ProjectName,
+			rowInfo.StartTime,
+			rowInfo.CloseTime,
+			rowInfo.IsActive,
+			rowInfo.ProjectID,
+			rowInfo.StuReportID.Valid)
 		// 若解析过该课程名，将项目归到其下
 		if idx, ok := indexMap[rowInfo.CourseName]; ok {
 			result[idx].Projects = append(result[idx].Projects, *pj)
@@ -166,7 +172,12 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 	classIndexMap := make(map[string]map[string]int)
 
 	for _, rowInfo := range *rowsInfo {
-		pj := domain.NewProjectTecItem(rowInfo.ProjectName, time.Time{}, rowInfo.CloseTime, rowInfo.ProjectID)
+		pj := domain.NewProjectTecItem(
+			rowInfo.ProjectName,
+			time.Time{},
+			rowInfo.CloseTime,
+			rowInfo.IsActive,
+			rowInfo.ProjectID)
 		if courseIdx, ok := courseIndexMap[rowInfo.CourseName]; ok {
 			if classIdxMap, ok := classIndexMap[rowInfo.CourseName]; ok {
 				if classIdx, ok := classIdxMap[rowInfo.ClassName]; ok {
