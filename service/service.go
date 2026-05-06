@@ -1,6 +1,6 @@
 // 该文件下的代码负责具体业务的逻辑
 
-package server
+package service
 
 import (
 	"LabSystem/domain"
