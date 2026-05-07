@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生端 - 实验报告管理系统</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+        }
+        .logout-btn {
+            padding: 8px 16px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .course {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .course-header {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .course-header:hover {
+            background: #5568d3;
+        }
+        .course-name {
+            font-size: 18px;
+            font-weight: 500;
+        }
+        .toggle-icon {
+            transition: transform 0.3s;
+        }
+        .toggle-icon.expanded {
+            transform: rotate(90deg);
+        }
+        .projects {
+            display: none;
+            padding: 15px;
+            background: #fafafa;
+        }
+        .projects.show {
+            display: block;
+        }
+        .project {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .project:last-child {
+            margin-bottom: 0;
+        }
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .project-name {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-submitted {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-closed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .project-info {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .upload-form {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .upload-form.show {
+            display: block;
+        }
+        .file-input-wrapper {
+            margin-bottom: 10px;
+        }
+        input[type="file"] {
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>学生端 - 我的实验项目</h1>
+        <button class="logout-btn" onclick="logout()">退出登录</button>
+    </div>
+
+    <div class="container">
+        {{range .Courses}}
+        <div class="course">
+            <div class="course-header" onclick="toggleCourse(this)">
+                <span class="course-name">{{.CourseName}}</span>
+                <span class="toggle-icon">▶</span>
+            </div>
+            <div class="projects">
+                {{range .Projects}}
+                <div class="project">
+                    <div class="project-header">
+                        <span class="project-name">{{.ProjectName}}</span>
+                        {{if not .IsActive}}
+                        <span class="status-badge status-closed">已关闭</span>
+                        {{else if .IsSubmit}}
+                        <span class="status-badge status-submitted">已提交</span>
+                        {{else}}
+                        <span class="status-badge status-pending">待提交</span>
+                        {{end}}
+                    </div>
+                    <div class="project-info">
+                        开始时间：{{.StartTime.Format "2006-01-02 15:04"}} |
+                        截止时间：{{.CloseTime.Format "2006-01-02 15:04"}}
+                    </div>
+                    <div class="project-actions">
+                        <button class="btn btn-secondary"
+                                hx-get="{{.DownloadReq.URL}}"
+                                hx-target="body">
+                            下载项目要求
+                        </button>
+                        {{if .IsActive}}
+                        <button class="btn btn-primary"
+                                onclick="toggleUploadForm(this)">
+                            {{if .IsSubmit}}重新提交报告{{else}}提交报告{{end}}
+                        </button>
+                        {{end}}
+                        {{if .IsSubmit}}
+                        <button class="btn btn-success"
+                                hx-get="{{.Check.URL}}"
+                                hx-target="body">
+                            预览我的报告
+                        </button>
+                        {{end}}
+                    </div>
+                    {{if .IsActive}}
+                    <form class="upload-form"
+                          hx-post="{{.Submit.URL}}"
+                          hx-encoding="multipart/form-data"
+                          hx-target="this"
+                          hx-swap="outerHTML">
+                        <div class="file-input-wrapper">
+                            <input type="file" name="file" required accept=".pdf,.doc,.docx,.zip">
+                        </div>
+                        <button type="submit" class="btn btn-success">确认上传</button>
+                        <button type="button" class="btn btn-secondary" onclick="toggleUploadForm(this.parentElement)">取消</button>
+                    </form>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <script>
+        function toggleCourse(header) {
+            const projects = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+            projects.classList.toggle('show');
+            icon.classList.toggle('expanded');
+        }
+
+        function toggleUploadForm(element) {
+            const form = element.closest('.project').querySelector('.upload-form');
+            form.classList.toggle('show');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        // 为所有 htmx 请求添加 token
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                evt.detail.headers['Authorization'] = 'Bearer ' + token;
+            }
+        });
+    </script>
+</body>
+</html>
