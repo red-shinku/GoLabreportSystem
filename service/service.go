@@ -123,13 +123,18 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 	var result []domain.StudentProjectView
 	indexMap := make(map[string]int)
 	for _, rowInfo := range *rowsInfo {
+		var reportID uint
+		if rowInfo.StuReportID.Valid {
+			reportID = uint(rowInfo.StuReportID.Int32)
+		}
 		pj := domain.NewProjectStuItem(
 			rowInfo.ProjectName,
 			rowInfo.StartTime,
 			rowInfo.CloseTime,
 			rowInfo.IsActive,
 			rowInfo.ProjectID,
-			rowInfo.StuReportID.Valid)
+			rowInfo.StuReportID.Valid,
+			reportID)
 		// 若解析过该课程名，将项目归到其下
 		if idx, ok := indexMap[rowInfo.CourseName]; ok {
 			result[idx].Projects = append(result[idx].Projects, *pj)

@@ -57,12 +57,14 @@ func NewStudentProjectView(courseName string) *StudentProjectView {
 type ProjectStuItem struct {
 	*ProjectItem
 	SubmitStatus bool
+	StuReportID  uint
 }
 
-func NewProjectStuItem(projectName string, startTime, closeTime time.Time, isActive bool, projectID uint, sbStatus bool) *ProjectStuItem {
+func NewProjectStuItem(projectName string, startTime, closeTime time.Time, isActive bool, projectID uint, sbStatus bool, stuReportID uint) *ProjectStuItem {
 	return &ProjectStuItem{
 		ProjectItem:  NewProjectItem(projectName, startTime, closeTime, isActive, projectID),
 		SubmitStatus: sbStatus,
+		StuReportID:  stuReportID,
 	}
 }
 
