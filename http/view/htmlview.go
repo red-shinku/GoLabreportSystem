@@ -1,8 +1,8 @@
 package view
 
 import (
-	"LabSystem/domain"
 	"LabSystem/http/route"
+	"LabSystem/internal/domain"
 	"net/url"
 	"time"
 )

@@ -1,7 +1,7 @@
 package service
 
 import (
-	"LabSystem/domain"
+	"LabSystem/internal/domain"
 	"archive/zip"
 	"fmt"
 	"io"

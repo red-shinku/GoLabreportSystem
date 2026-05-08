@@ -3,7 +3,7 @@
 package service
 
 import (
-	"LabSystem/domain"
+	"LabSystem/internal/domain"
 	"io"
 	"time"
 )
@@ -209,7 +209,7 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 }
 
 // UploadProjectFile 教师上传/重传项目文件后更改路径信息
-func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.ProjectFileForm) error {
+func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.ProjectFileData) error {
 	courseName, className, projectName, err := tp.repoPubProject.QueryProjectInfo(form.ProjectID)
 	if err != nil {
 		return err
@@ -226,7 +226,7 @@ func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.Pro
 }
 
 // CreateProject 教师新建项目
-func (tp *TeacherProjectService) CreateProject(form *domain.ProjectForm) error {
+func (tp *TeacherProjectService) CreateProject(form *domain.ProjectData) error {
 	info := domain.NewProjectInfo(
 		form.OfferingID,
 		form.ProjectName,
@@ -328,7 +328,7 @@ func (tr *TeacherReportService) DownloadStuReportBatch(w io.Writer, projectID ui
 }
 
 // UploadStuReport 学生上传报告
-func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportForm) error {
+func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportData) error {
 	//TODO : 启用两个协程完成 ?
 	meta, info, err := sr.genStuReportData(form)
 	if err != nil {
@@ -349,7 +349,7 @@ func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuRep
 }
 
 // genStuReportData 生成学生报告业务元数据
-func (sr *StudentReportService) genStuReportData(form *domain.StuReportForm) (*domain.StuReportMeta, *domain.StuReportInfo, error) {
+func (sr *StudentReportService) genStuReportData(form *domain.StuReportData) (*domain.StuReportMeta, *domain.StuReportInfo, error) {
 	courseName, className, projectName, err := sr.repoProject.QueryProjectInfo(form.ProjectID)
 	if err != nil {
 		return nil, nil, err

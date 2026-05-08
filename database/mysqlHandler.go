@@ -1,7 +1,7 @@
 package database
 
 import (
-	"LabSystem/domain"
+	"LabSystem/internal/domain"
 	"database/sql"
 	"errors"
 	"fmt"
