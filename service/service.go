@@ -91,8 +91,9 @@ type StudentProjectService struct {
 // teacherProjectOp 教师操作项目的接口
 type teacherProjectOp interface {
 	QueryTeacherProject(teacherID string) ([]domain.TeacherProjectInfo, error)
+	QueryProjectByID(projectID uint) (*domain.TeacherProjectInfo, error)
 	UpdateProjectFlag(projectID uint, flag bool) error
-	AddProject(project *domain.ProjectInfo) error
+	AddProject(project *domain.ProjectInfo) (uint, error)
 	DelProject(projectID uint) error
 	UpdateProjectFile(projectID uint, projectFilePath string) error
 }
@@ -224,31 +225,37 @@ func (tp *TeacherProjectService) UploadProjectFile(r io.Reader, form *domain.Pro
 	return nil
 }
 
-// CreateProject 教师新建项目
-func (tp *TeacherProjectService) CreateProject(form *domain.ProjectData) error {
+// CreateProject 教师新建项目，返回填充好 ID 的项目视图项
+func (tp *TeacherProjectService) CreateProject(form *domain.ProjectData) (*domain.ProjectTecItem, error) {
+	startTime := time.Now()
 	info := domain.NewProjectInfo(
 		form.OfferingID,
 		form.ProjectName,
 		"",
-		time.Now(),
+		startTime,
 		form.CloseTime)
-	if err := tp.repoTecProject.AddProject(info); err != nil {
-		return err
+	projectID, err := tp.repoTecProject.AddProject(info)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return domain.NewProjectTecItem(form.ProjectName, startTime, form.CloseTime, false, projectID), nil
 }
 
-// ChangeProjectStatus 开启/关闭项目
-func (tp *TeacherProjectService) ChangeProjectStatus(projectID uint) error {
+// ChangeProjectStatus 开启/关闭项目，返回切换后的项目视图项
+func (tp *TeacherProjectService) ChangeProjectStatus(projectID uint) (*domain.ProjectTecItem, error) {
 	flag, err := tp.repoPubProject.QueryProjectFlag(projectID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	flag = !flag
 	if err := tp.repoTecProject.UpdateProjectFlag(projectID, flag); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	info, err := tp.repoTecProject.QueryProjectByID(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return domain.NewProjectTecItem(info.ProjectName, time.Time{}, info.CloseTime, info.IsActive, projectID), nil
 }
 
 // DeleteProject 删除项目，并清除相关文件
@@ -296,11 +303,12 @@ type teacherReportOp interface {
 }
 
 type studentReportOp interface {
-	InsertStuReport(stuRp *domain.StuReportInfo) error
+	InsertStuReport(stuRp *domain.StuReportInfo) (uint, error)
 }
 
 type projectInfoOp interface {
 	QueryProjectInfo(projectID uint) (courseName, className, projectName string, err error)
+	QueryStuProjectByID(studentID string, projectID uint) (*domain.StudentProjectInfo, error)
 }
 
 type studentInfoOp interface {
@@ -326,25 +334,37 @@ func (tr *TeacherReportService) DownloadStuReportBatch(w io.Writer, projectID ui
 	return nil
 }
 
-// UploadStuReport 学生上传报告
-func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportData) error {
+// UploadStuReport 学生上传报告，返回刷新后的学生端项目视图项
+func (sr *StudentReportService) UploadStuReport(r io.Reader, form *domain.StuReportData) (*domain.ProjectStuItem, error) {
 	//TODO : 启用两个协程完成 ?
 	meta, info, err := sr.genStuReportData(form)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := meta.Check(); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := sr.fs.SaveFile(r, meta); err != nil {
-		return err
+		return nil, err
 	}
 	//FIXME: 开启事务
-	if err := sr.repoStuReport.InsertStuReport(info); err != nil {
-		return err
+	reportID, err := sr.repoStuReport.InsertStuReport(info)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	rowInfo, err := sr.repoProject.QueryStuProjectByID(form.StudentID, form.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	return domain.NewProjectStuItem(
+		rowInfo.ProjectName,
+		rowInfo.StartTime,
+		rowInfo.CloseTime,
+		rowInfo.IsActive,
+		rowInfo.ProjectID,
+		true,
+		reportID), nil
 }
 
 // genStuReportData 生成学生报告业务元数据
