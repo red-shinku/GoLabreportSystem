@@ -1,0 +1,29 @@
+{{define "submission-list"}}
+<h3 style="margin-bottom:12px;">学生完成情况</h3>
+{{if .}}
+<table class="submission-table">
+    <thead>
+        <tr>
+            <th>学号</th>
+            <th>状态</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .}}
+        <tr>
+            <td>{{.StudentID}}</td>
+            <td>
+                {{if .StuReportID.Valid}}
+                <span class="status-badge status-open">已提交</span>
+                {{else}}
+                <span class="status-badge status-closed">未提交</span>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<p>暂无选课学生</p>
+{{end}}
+{{end}}

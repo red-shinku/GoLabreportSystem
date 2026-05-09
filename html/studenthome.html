@@ -192,55 +192,7 @@
             </div>
             <div class="projects">
                 {{range .Projects}}
-                <div class="project">
-                    <div class="project-header">
-                        <span class="project-name">{{.ProjectName}}</span>
-                        {{if not .IsActive}}
-                        <span class="status-badge status-closed">已关闭</span>
-                        {{else if .IsSubmit}}
-                        <span class="status-badge status-submitted">已提交</span>
-                        {{else}}
-                        <span class="status-badge status-pending">待提交</span>
-                        {{end}}
-                    </div>
-                    <div class="project-info">
-                        开始时间：{{.StartTime.Format "2006-01-02 15:04"}} |
-                        截止时间：{{.CloseTime.Format "2006-01-02 15:04"}}
-                    </div>
-                    <div class="project-actions">
-                        <button class="btn btn-secondary"
-                                hx-get="{{.DownloadReq.URL}}"
-                                hx-target="body">
-                            下载项目要求
-                        </button>
-                        {{if .IsActive}}
-                        <button class="btn btn-primary"
-                                onclick="toggleUploadForm(this)">
-                            {{if .IsSubmit}}重新提交报告{{else}}提交报告{{end}}
-                        </button>
-                        {{end}}
-                        {{if .IsSubmit}}
-                        <button class="btn btn-success"
-                                hx-get="{{.Check.URL}}"
-                                hx-target="body">
-                            预览我的报告
-                        </button>
-                        {{end}}
-                    </div>
-                    {{if .IsActive}}
-                    <form class="upload-form"
-                          hx-post="{{.Submit.URL}}"
-                          hx-encoding="multipart/form-data"
-                          hx-target="this"
-                          hx-swap="outerHTML">
-                        <div class="file-input-wrapper">
-                            <input type="file" name="file" required accept=".pdf,.doc,.docx,.zip">
-                        </div>
-                        <button type="submit" class="btn btn-success">确认上传</button>
-                        <button type="button" class="btn btn-secondary" onclick="toggleUploadForm(this.parentElement)">取消</button>
-                    </form>
-                    {{end}}
-                </div>
+                {{template "project-stu" .}}
                 {{end}}
             </div>
         </div>
@@ -262,10 +214,9 @@
 
         function logout() {
             localStorage.removeItem('token');
-            window.location.href = '/login';
+            window.location.href = '/sessions';
         }
 
-        // 为所有 htmx 请求添加 token
         document.body.addEventListener('htmx:configRequest', function(evt) {
             const token = localStorage.getItem('token');
             if (token) {

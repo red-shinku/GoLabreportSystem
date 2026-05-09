@@ -1,0 +1,83 @@
+{{define "project-tec"}}
+<div class="project">
+    <div class="project-header">
+        <span class="project-name">{{.ProjectName}}</span>
+        {{if .IsActive}}
+        <span class="status-badge status-open">已开放</span>
+        {{else}}
+        <span class="status-badge status-closed">已关闭</span>
+        {{end}}
+    </div>
+    <div class="project-info">
+        开始时间：{{.StartTime.Format "2006-01-02 15:04"}} |
+        截止时间：{{.CloseTime.Format "2006-01-02 15:04"}}
+    </div>
+    <div class="project-actions">
+        <button class="btn btn-primary"
+                onclick="toggleUploadForm(this)">
+            上传要求文件
+        </button>
+        <button class="btn btn-secondary"
+                hx-get="{{.Check.URL}}"
+                hx-target="body">
+            预览要求文件
+        </button>
+        {{if .IsActive}}
+        <button class="btn btn-warning"
+                hx-patch="{{.SwiftClose.URL}}"
+                hx-headers='{"Content-Type": "application/json"}'
+                hx-vals='{"status": "closed"}'
+                hx-target="closest .project"
+                hx-swap="outerHTML"
+                hx-confirm="确认关闭该项目？">
+            关闭项目
+        </button>
+        {{else}}
+        <button class="btn btn-success"
+                hx-patch="{{.SwiftOpen.URL}}"
+                hx-headers='{"Content-Type": "application/json"}'
+                hx-vals='{"status": "open"}'
+                hx-target="closest .project"
+                hx-swap="outerHTML"
+                hx-confirm="确认开放该项目？">
+            开放项目
+        </button>
+        {{end}}
+        <button class="btn btn-info"
+                hx-get="{{.WatchStuSubmission.URL}}"
+                hx-target="#modal-content"
+                onclick="showModal()">
+            查看完成情况
+        </button>
+        <button class="btn btn-success"
+                hx-get="{{.DownloadStuRp.URL}}"
+                hx-target="body">
+            打包下载报告
+        </button>
+        <button class="btn btn-danger"
+                hx-delete="{{.Delete.URL}}"
+                hx-confirm="确认删除该项目？此操作不可恢复！"
+                hx-target="closest .project"
+                hx-swap="outerHTML">
+            删除项目
+        </button>
+    </div>
+
+    <!-- 上传文件表单 -->
+    <form class="form-inline"
+          hx-put="{{.Afford.URL}}"
+          hx-encoding="multipart/form-data"
+          hx-target="this"
+          hx-swap="outerHTML"
+          hx-on::after-request="if(event.detail.successful){this.reset();toggleUploadForm(this)}">
+        <div class="form-group">
+            <label>选择项目要求文件</label>
+            <input type="file" name="filename" required accept=".pdf,.doc,.docx,.zip">
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-success">确认上传</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleUploadForm(this.parentElement.parentElement)">取消</button>
+        </div>
+    </form>
+</div>
+{{end}}
