@@ -26,6 +26,7 @@ import (
 )
 
 // 暂定义的JWT密钥
+// TODO: JWT密钥获取
 var secret []byte
 
 // contextKey 上层中间件与控制层之间传递身份信息的 context 键类型
@@ -37,35 +38,6 @@ const (
 	// CtxKeyRole 登录用户身份（student / teacher / operator）
 	CtxKeyRole contextKey = "role"
 )
-
-// ServeError 统一的 HTTP 层错误处理
-func ServeError(w http.ResponseWriter, err error) {
-	status := httperr.HTTPStatus(err)
-	msg := "Internal Server Error"
-	// 不暴露服务器内部错误
-	if status < 500 {
-		msg = err.Error()
-	}
-
-	// 统一以json格式返回
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
-// HandlerFunc 自定义的 Handler 类型，添加了对错误的返回
-type HandlerFunc func(http.ResponseWriter, *http.Request) error
-
-// Adapt http.HandlerFunc的适配器，适配自定义Handler
-// 让Handler统一将错误返回，在一处处理
-func Adapt(h HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		err := h(w, r)
-		if err != nil {
-			ServeError(w, err)
-		}
-	}
-}
 
 // parseUintPath 从 URL 路径变量解析 uint ID，失败返回 400
 func parseUintPath(r *http.Request, name string) (uint, error) {
