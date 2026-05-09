@@ -1,4 +1,4 @@
-package server
+package controller
 
 // HTTP控制层，该文件定义最终的HTTP处理器
 //
@@ -114,7 +114,7 @@ func (s *Sessions) Login(w http.ResponseWriter, r *http.Request) error {
 	http.SetCookie(w, &authJWTCk)
 
 	// 重定向到用户界面
-	http.Redirect(w, r, "/home", http.StatusMovedPermanently)
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	return nil
 }
 
