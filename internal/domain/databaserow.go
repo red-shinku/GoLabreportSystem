@@ -62,6 +62,7 @@ func NewStudentProjectInfo(courseName string, projectID uint, projectName string
 type TeacherProjectInfo struct {
 	CourseName  string
 	ClassName   string
+	OfferingID  uint
 	ProjectID   uint
 	ProjectName string
 	CloseTime   time.Time
@@ -69,10 +70,11 @@ type TeacherProjectInfo struct {
 }
 
 // NewTeacherProjectInfo 创建TeacherProjectInfo实例
-func NewTeacherProjectInfo(courseName, className string, projectID uint, projectName string, closeTime time.Time, isActive bool) *TeacherProjectInfo {
+func NewTeacherProjectInfo(courseName, className string, offeringID, projectID uint, projectName string, closeTime time.Time, isActive bool) *TeacherProjectInfo {
 	return &TeacherProjectInfo{
 		CourseName:  courseName,
 		ClassName:   className,
+		OfferingID:  offeringID,
 		ProjectID:   projectID,
 		ProjectName: projectName,
 		CloseTime:   closeTime,

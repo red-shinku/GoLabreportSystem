@@ -146,7 +146,6 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 		}
 	}
 	return result
-	//FIXME: 处理可能的panic？
 }
 
 // DownloadProjectFile 客户下载项目要求文件
@@ -188,14 +187,14 @@ func (tp *TeacherProjectService) organizeTecPjView(rowsInfo *[]domain.TeacherPro
 				if classIdx, ok := classIdxMap[rowInfo.ClassName]; ok {
 					result[courseIdx].Classes[classIdx].Projects = append(result[courseIdx].Classes[classIdx].Projects, *pj)
 				} else {
-					newClass := domain.NewClassItem(rowInfo.ClassName)
+					newClass := domain.NewClassItem(rowInfo.ClassName, rowInfo.OfferingID)
 					newClass.Projects = append(newClass.Projects, *pj)
 					classIdxMap[rowInfo.ClassName] = len(result[courseIdx].Classes)
 					result[courseIdx].Classes = append(result[courseIdx].Classes, *newClass)
 				}
 			}
 		} else {
-			newClass := domain.NewClassItem(rowInfo.ClassName)
+			newClass := domain.NewClassItem(rowInfo.ClassName, rowInfo.OfferingID)
 			newClass.Projects = append(newClass.Projects, *pj)
 			newCourse := domain.NewTeacherProjectView(rowInfo.CourseName)
 			newCourse.Classes = append(newCourse.Classes, *newClass)

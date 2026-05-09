@@ -83,15 +83,17 @@ func NewTeacherProjectView(courseName string) *TeacherProjectView {
 }
 
 type ClassItem struct {
-	ClassName string
-	Projects  []ProjectTecItem
+	ClassName  string
+	OfferingID uint
+	Projects   []ProjectTecItem
 }
 
 // NewClassItem 创建ClassItem实例
-func NewClassItem(className string) *ClassItem {
+func NewClassItem(className string, offeringID uint) *ClassItem {
 	return &ClassItem{
-		ClassName: className,
-		Projects:  make([]ProjectTecItem, 0),
+		ClassName:  className,
+		OfferingID: offeringID,
+		Projects:   make([]ProjectTecItem, 0),
 	}
 }
 

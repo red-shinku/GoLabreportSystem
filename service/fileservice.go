@@ -69,7 +69,6 @@ func (f *FileService) LoadFileBatch(w io.Writer, fg pathGenerator) {
 
 	for fg.HasNext() {
 		if err := addFileToZip(zipWriter, fg.Next()); err != nil {
-			//FIXME: 后续完善日志
 			log.Printf("Error adding file to zip: %v", err)
 		}
 	}

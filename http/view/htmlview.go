@@ -64,7 +64,7 @@ func BuildTecProjectViewWithUrl(serviceViews []domain.TeacherProjectView) *TecPr
 		for _, cls := range sv.Classes {
 			classItem := ClassTecItemWithUrl{
 				ClassName:     cls.ClassName,
-				CreateProject: HXAction{route.ProjectsURL(), "POST"},
+				CreateProject: HXAction{route.OfferingClassProjectsURL(cls.OfferingID), "POST"},
 			}
 			for _, pj := range cls.Projects {
 				classItem.Projects = append(classItem.Projects, ProjectTecItemWithUrl{

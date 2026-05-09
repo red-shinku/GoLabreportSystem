@@ -19,7 +19,17 @@ func SessionsURL() string {
 	return APIBase + "/sessions"
 }
 
-// ProjectsURL 获取项目列表（GET）/ 新建项目（POST）
+// OfferingClassesURL 班级资源集合
+func OfferingClassesURL() string {
+	return APIBase + "/offeringclass"
+}
+
+// OfferingClassProjectsURL 在指定开课班级下新建项目（POST，教师）
+func OfferingClassProjectsURL(offeringID uint) string {
+	return fmt.Sprintf("%s/offeringclass/%d", APIBase, offeringID)
+}
+
+// ProjectsURL 获取项目列表（GET）
 func ProjectsURL() string {
 	return APIBase + "/projects"
 }

@@ -139,7 +139,7 @@ func (p *ProjectRepo) QueryStuProject(studentID string) ([]domain.StudentProject
 
 // QueryTeacherProject 查询一个教师所管理的项目，包含项目所属班级、课程等信息
 func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherProjectInfo, error) {
-	query := fmt.Sprintf("select c.courseName, coff.className, p.projectID, p.projectName, p.deadline, p.isActive "+
+	query := fmt.Sprintf("select c.courseName, coff.className, coff.offeringID, p.projectID, p.projectName, p.deadline, p.isActive "+
 		"from %s tec "+
 		"join %s coff on tec.offeringID = coff.offeringID "+
 		"join %s c on coff.courseID = c.courseID "+
@@ -147,7 +147,7 @@ func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherPro
 		"where tec.teacherID = ?",
 		tabTeacherCourse, tabCourseOffering, tabCourse, tabProject)
 	scanFunc := func(rows *sql.Rows, row *domain.TeacherProjectInfo) error {
-		return rows.Scan(&row.CourseName, &row.ClassName, &row.ProjectID, &row.ProjectName,
+		return rows.Scan(&row.CourseName, &row.ClassName, &row.OfferingID, &row.ProjectID, &row.ProjectName,
 			&row.CloseTime, &row.IsActive)
 	}
 	args := []any{teacherID}
