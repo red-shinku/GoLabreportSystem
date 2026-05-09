@@ -12,8 +12,13 @@ import (
 	"LabSystem/service"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
+	"time"
 )
+
+// 暂定义的JWT密钥
+var secret []byte
 
 // ServeError 统一的 HTTP 层错误处理
 func ServeError(w http.ResponseWriter, err error) {
@@ -49,6 +54,32 @@ type Sessions struct {
 	auth *service.AuthService
 }
 
+// genShortJWT 生成短期（30分钟）的JWT，
+// secret为服务端管理员定义的密钥，需要在配置中获取
+func (s *Sessions) genShortJWT(userID string, role string, secret []byte) (string, error) {
+	expirationTime := time.Now().Add(30 * time.Minute)
+
+	claims := api.LoginJWT{
+		UserID: userID,
+		Role:   role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Subject:   "auth", // 可选
+		},
+	}
+
+	// 创建 token（指定签名算法，HS256）
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// 签名并生成字符串
+	tokenString, err := token.SignedString(secret)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
 // Login 登录。验证密码后，重定向URL，指向对应的用户界面
 // 其后置中间件会负责处理凭证
 func (s *Sessions) Login(w http.ResponseWriter, r *http.Request) error {
@@ -60,29 +91,26 @@ func (s *Sessions) Login(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	userIdCk := http.Cookie{
-		Name:     "user_id",
-		Value:    userInfo.Number,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
-	identity, ok := api.Identity(userInfo.Identity)
+	role, ok := api.Role(userInfo.Identity)
 	if !ok {
 		return httperr.WithStatus(
-			fmt.Errorf("identity code not exist"),
+			fmt.Errorf("Sessions.Login() error: unknown identity code"),
 			http.StatusInternalServerError)
 	}
-	identityCk := http.Cookie{
-		Name:     "identity",
-		Value:    identity,
+	authJwt, err := s.genShortJWT(
+		userInfo.Number,
+		role,
+		secret,
+	)
+	authJWTCk := http.Cookie{
+		Name:     "auth_token",
+		Value:    authJwt,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}
-	//TODO: 身份验证如何做？
-	w.Header().Add("Set-Cookie", userIdCk.String())
-	w.Header().Add("Set-Cookie", identityCk.String())
+	http.SetCookie(w, &authJWTCk)
+
 	// 重定向到用户界面
 	http.Redirect(w, r, "/home", http.StatusMovedPermanently)
 	return nil
@@ -95,6 +123,14 @@ func (h *Home) LoginPage(w http.ResponseWriter, r *http.Request) error {}
 // HomePage 根据解析到的cookie中的身份信息，返回对应的用户界面
 func (h *Home) HomePage(w http.ResponseWriter, r *http.Request) error {}
 
+// OfferingClass 授课班级及其子资源
+type OfferingClass struct {
+	tecProjects *service.TeacherProjectService
+}
+
+// CreateProject 在url中解析到的offeringId下，新建项目
+func (o *OfferingClass) CreateProject(w http.ResponseWriter, r *http.Request) error {}
+
 // Projects 与项目资源相关的
 type Projects struct {
 	tecProjects *service.TeacherProjectService
@@ -103,12 +139,38 @@ type Projects struct {
 	stuReports  *service.StudentReportService
 }
 
+// DownloadRequirement 解析preview查询参数，下载或预览项目要求文件，
+func (p *Projects) DownloadRequirement(w http.ResponseWriter, r *http.Request) error {}
+
+// WatchStuSubmissions 查看学生完成情况
+func (p *Projects) WatchStuSubmissions(w http.ResponseWriter, r *http.Request) error {}
+
+// SwiftProjectStatus 根据请求体的status值，开启或关闭项目
+func (p *Projects) SwiftProjectStatus(w http.ResponseWriter, r *http.Request) error {}
+
+// UploadRequirement form-data格式，上传要求文件
+func (p *Projects) UploadRequirement(w http.ResponseWriter, r *http.Request) error {
+
+}
+
+// DeleteProject 删除项目
+func (p *Projects) DeleteProject(w http.ResponseWriter, r *http.Request) error {}
+
+// UploadReport 上传实验报告
+func (p *Projects) UploadReport(w http.ResponseWriter, r *http.Request) error {}
+
 // Submissions 实验报告资源
 // 在下载/预览单个报告时作为主资源
 // 其他时候仅作为项目的子资源
 type Submissions struct {
 	tecReports *service.TeacherReportService
 }
+
+// DownSubmission 根据查询参数preview的值，下载或预览实验报告
+func (s *Submissions) DownSubmission(w http.ResponseWriter, r *http.Request) error {}
+
+// DownSubmissionBatch 打包下载学生实验报告
+func (s *Submissions) DownSubmissionBatch(w http.ResponseWriter, r *http.Request) error {}
 
 // Users 用户资源，包括用户信息操作
 type Users struct{}
