@@ -96,6 +96,20 @@ func JwtValidator(next HandlerFunc) HandlerFunc {
 	}
 }
 
+// LoginCheck 登录态检查。
+// 访问站点主页时（URI为"/"）若未携带JWT，重定向到登录页面（"/sessions"）
+func LoginCheck(next HandlerFunc) HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		if r.URL.Path == "/" {
+			if _, err := r.Cookie(authCookieName); err != nil {
+				http.Redirect(w, r, "/sessions", http.StatusFound)
+				return nil
+			}
+		}
+		return next(w, r)
+	}
+}
+
 // Logger 日志中间件
 // 分为前置与后置两个部分。
 // 前置部分记录到达的请求信息，后置部分记录服务端的处理错误
