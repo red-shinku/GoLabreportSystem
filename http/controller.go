@@ -166,9 +166,10 @@ func (h *Home) HomePage(w http.ResponseWriter, r *http.Request) error {
 // OfferingClass 授课班级及其子资源
 type OfferingClass struct {
 	tecProjects *service.TeacherProjectService
+	tecHome     *html.TecHomeGenerator
 }
 
-// CreateProject 在url中解析到的offeringId下，新建项目
+// CreateProject 在url中解析到的offeringId下，新建项目，返回新项目卡片HTML片段
 func (o *OfferingClass) CreateProject(w http.ResponseWriter, r *http.Request) error {
 	offeringID, err := parseUintPath(r, "offeringId")
 	if err != nil {
@@ -181,13 +182,13 @@ func (o *OfferingClass) CreateProject(w http.ResponseWriter, r *http.Request) er
 	}
 
 	form := domain.NewProjectData(offeringID, body.ProjectName, body.CloseTime)
-	if err := o.tecProjects.CreateProject(form); err != nil {
+	item, err := o.tecProjects.CreateProject(form)
+	if err != nil {
 		return err
 	}
 
-	//TODO: 需要更新前端页面，html层要生成html片段并返回
 	w.WriteHeader(http.StatusCreated)
-	return nil
+	return o.tecHome.ProjectCard(w, view.BuildProjectTecItemWithUrl(item))
 }
 
 // Projects 与项目资源相关的
@@ -196,6 +197,8 @@ type Projects struct {
 	stuProjects *service.StudentProjectService
 	tecReports  *service.TeacherReportService
 	stuReports  *service.StudentReportService
+	tecHome     *html.TecHomeGenerator
+	stuHome     *html.StuHomeGenerator
 }
 
 // DownloadRequirement 解析preview查询参数，下载或预览项目要求文件，
@@ -217,7 +220,7 @@ func (p *Projects) DownloadRequirement(w http.ResponseWriter, r *http.Request) e
 	return p.stuProjects.DownloadProjectFile(w, projectID)
 }
 
-// WatchStuSubmissions 查看学生完成情况
+// WatchStuSubmissions 查看学生完成情况，返回HTML片段给模态框
 func (p *Projects) WatchStuSubmissions(w http.ResponseWriter, r *http.Request) error {
 	projectID, err := parseUintPath(r, "projectId")
 	if err != nil {
@@ -229,11 +232,10 @@ func (p *Projects) WatchStuSubmissions(w http.ResponseWriter, r *http.Request) e
 		return err
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	return json.NewEncoder(w).Encode(statuses)
+	return p.tecHome.SubmissionList(w, statuses)
 }
 
-// SwiftProjectStatus 根据请求体的status值，开启或关闭项目
+// SwiftProjectStatus 根据请求体的status值，开启或关闭项目，返回刷新后的项目卡片片段
 func (p *Projects) SwiftProjectStatus(w http.ResponseWriter, r *http.Request) error {
 	projectID, err := parseUintPath(r, "projectId")
 	if err != nil {
@@ -250,15 +252,15 @@ func (p *Projects) SwiftProjectStatus(w http.ResponseWriter, r *http.Request) er
 			http.StatusBadRequest)
 	}
 
-	if err := p.tecProjects.ChangeProjectStatus(projectID); err != nil {
+	item, err := p.tecProjects.ChangeProjectStatus(projectID)
+	if err != nil {
 		return err
 	}
 
-	w.WriteHeader(http.StatusOK)
-	return nil
+	return p.tecHome.ProjectCard(w, view.BuildProjectTecItemWithUrl(item))
 }
 
-// UploadRequirement form-data格式，上传要求文件
+// UploadRequirement form-data格式，上传要求文件；返回空片段以收起上传表单
 func (p *Projects) UploadRequirement(w http.ResponseWriter, r *http.Request) error {
 	projectID, err := parseUintPath(r, "projectId")
 	if err != nil {
@@ -280,11 +282,12 @@ func (p *Projects) UploadRequirement(w http.ResponseWriter, r *http.Request) err
 		return err
 	}
 
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
 
-// DeleteProject 删除项目
+// DeleteProject 删除项目，返回空片段让 HTMX 移除对应卡片
 func (p *Projects) DeleteProject(w http.ResponseWriter, r *http.Request) error {
 	projectID, err := parseUintPath(r, "projectId")
 	if err != nil {
@@ -295,11 +298,12 @@ func (p *Projects) DeleteProject(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	return nil
 }
 
-// UploadReport 上传实验报告
+// UploadReport 上传实验报告，返回刷新后的学生端项目卡片片段
 func (p *Projects) UploadReport(w http.ResponseWriter, r *http.Request) error {
 	projectID, err := parseUintPath(r, "projectId")
 	if err != nil {
@@ -325,12 +329,13 @@ func (p *Projects) UploadReport(w http.ResponseWriter, r *http.Request) error {
 
 	format := strings.TrimPrefix(filepath.Ext(header.Filename), ".")
 	form := domain.NewStuReportData(studentID, projectID, format)
-	if err := p.stuReports.UploadStuReport(file, form); err != nil {
+	item, err := p.stuReports.UploadStuReport(file, form)
+	if err != nil {
 		return err
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	return nil
+	return p.stuHome.ProjectCard(w, view.BuildProjectStuItemWithUrl(item))
 }
 
 // Submissions 实验报告资源

@@ -56,8 +56,6 @@ type ProjectTecItemWithUrl struct {
 }
 
 func BuildTecProjectViewWithUrl(serviceViews []domain.TeacherProjectView) *TecProjectViewWithUrl {
-	preview := url.Values{route.QueryKeyPreview: {"true"}}
-
 	result := &TecProjectViewWithUrl{}
 	for _, sv := range serviceViews {
 		courseItem := CourseTecItemWithUrl{CourseName: sv.CourseName}
@@ -67,25 +65,31 @@ func BuildTecProjectViewWithUrl(serviceViews []domain.TeacherProjectView) *TecPr
 				CreateProject: HXAction{route.OfferingClassProjectsURL(cls.OfferingID), "POST"},
 			}
 			for _, pj := range cls.Projects {
-				classItem.Projects = append(classItem.Projects, ProjectTecItemWithUrl{
-					ProjectName:        pj.ProjectName,
-					StartTime:          pj.StartTime,
-					CloseTime:          pj.CloseTime,
-					IsActive:           pj.IsActive,
-					Afford:             HXAction{route.ProjectRequirementURL(pj.ProjectID), "PUT"},
-					Check:              HXAction{route.WithQuery(route.ProjectRequirementURL(pj.ProjectID), preview), "GET"},
-					SwiftOpen:          HXAction{route.ProjectURL(pj.ProjectID), "PATCH"},
-					SwiftClose:         HXAction{route.ProjectURL(pj.ProjectID), "PATCH"},
-					Delete:             HXAction{route.ProjectURL(pj.ProjectID), "DELETE"},
-					WatchStuSubmission: HXAction{route.ProjectSubmissionsURL(pj.ProjectID), "GET"},
-					DownloadStuRp:      HXAction{route.ProjectSubmissionsArchiveURL(pj.ProjectID), "GET"},
-				})
+				classItem.Projects = append(classItem.Projects, *BuildProjectTecItemWithUrl(&pj))
 			}
 			courseItem.Classes = append(courseItem.Classes, classItem)
 		}
 		result.Courses = append(result.Courses, courseItem)
 	}
 	return result
+}
+
+// BuildProjectTecItemWithUrl 构建单个教师端项目视图（供 AJAX 片段使用）
+func BuildProjectTecItemWithUrl(pj *domain.ProjectTecItem) *ProjectTecItemWithUrl {
+	preview := url.Values{route.QueryKeyPreview: {"true"}}
+	return &ProjectTecItemWithUrl{
+		ProjectName:        pj.ProjectName,
+		StartTime:          pj.StartTime,
+		CloseTime:          pj.CloseTime,
+		IsActive:           pj.IsActive,
+		Afford:             HXAction{route.ProjectRequirementURL(pj.ProjectID), "PUT"},
+		Check:              HXAction{route.WithQuery(route.ProjectRequirementURL(pj.ProjectID), preview), "GET"},
+		SwiftOpen:          HXAction{route.ProjectURL(pj.ProjectID), "PATCH"},
+		SwiftClose:         HXAction{route.ProjectURL(pj.ProjectID), "PATCH"},
+		Delete:             HXAction{route.ProjectURL(pj.ProjectID), "DELETE"},
+		WatchStuSubmission: HXAction{route.ProjectSubmissionsURL(pj.ProjectID), "GET"},
+		DownloadStuRp:      HXAction{route.ProjectSubmissionsArchiveURL(pj.ProjectID), "GET"},
+	}
 }
 
 // 学生的项目视图
@@ -120,27 +124,31 @@ type ProjectStuItemWithUrl struct {
 }
 
 func BuildStuProjectViewWithUrl(serviceViews []domain.StudentProjectView) *StuProjectViewWithUrl {
-	preview := url.Values{route.QueryKeyPreview: {"true"}}
-
 	result := &StuProjectViewWithUrl{}
 	for _, sv := range serviceViews {
 		courseItem := CourseStuItemWithUrl{CourseName: sv.CourseName}
 		for _, pj := range sv.Projects {
-			item := ProjectStuItemWithUrl{
-				ProjectName: pj.ProjectName,
-				StartTime:   pj.StartTime,
-				CloseTime:   pj.CloseTime,
-				IsSubmit:    pj.SubmitStatus,
-				IsActive:    pj.IsActive,
-				DownloadReq: HXAction{route.ProjectRequirementURL(pj.ProjectID), "GET"},
-				Submit:      HXAction{route.ProjectSubmissionsURL(pj.ProjectID), "POST"},
-			}
-			if pj.SubmitStatus {
-				item.Check = HXAction{route.WithQuery(route.SubmissionFileURL(pj.StuReportID), preview), "GET"}
-			}
-			courseItem.Projects = append(courseItem.Projects, item)
+			courseItem.Projects = append(courseItem.Projects, *BuildProjectStuItemWithUrl(&pj))
 		}
 		result.Courses = append(result.Courses, courseItem)
 	}
 	return result
+}
+
+// BuildProjectStuItemWithUrl 构建单个学生端项目视图（供 AJAX 片段使用）
+func BuildProjectStuItemWithUrl(pj *domain.ProjectStuItem) *ProjectStuItemWithUrl {
+	preview := url.Values{route.QueryKeyPreview: {"true"}}
+	item := &ProjectStuItemWithUrl{
+		ProjectName: pj.ProjectName,
+		StartTime:   pj.StartTime,
+		CloseTime:   pj.CloseTime,
+		IsSubmit:    pj.SubmitStatus,
+		IsActive:    pj.IsActive,
+		DownloadReq: HXAction{route.ProjectRequirementURL(pj.ProjectID), "GET"},
+		Submit:      HXAction{route.ProjectSubmissionsURL(pj.ProjectID), "POST"},
+	}
+	if pj.SubmitStatus {
+		item.Check = HXAction{route.WithQuery(route.SubmissionFileURL(pj.StuReportID), preview), "GET"}
+	}
+	return item
 }
