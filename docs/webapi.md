@@ -13,13 +13,33 @@
 ```
 **返回**
 ```
+set-cookie: jwt{user_id, identity}; path=/; httponly; samesite=lax;
+```
+
+## 页面
+
+* / 用户主界面
+
+* /sessions 登录界面 
+
+## 班级资源
+
+* /api/v1/offeringclass
+
+### 新建项目（教师）
+
+POST /api/v1/offeringclass/{offeringId}
+
+**Body**
+
+```
 {
-  "token": "...",
-  "user": {...}
+  "projectname": "...",
+  "closeTime": "..."
 }
 ```
 
-## 项目操作
+## 项目资源
 
 * /api/v1/projects
 
@@ -27,7 +47,7 @@
 
 GET /api/v1/projects
 
-身份放在token中。  
+身份在cookie中获取。  
 不同身份的视图结构不一样。
 
 ### 下载/预览项目要求文件
@@ -53,20 +73,6 @@ PATCH /api/v1/projects/{projectId}
 }
 ```
 
-### 新建项目（教师）
-
-POST /api/v1/projects
-
-**Body**
-
-```
-{
-  "offeringId": 1,
-  "name": "...",
-  "closeTime": "..."
-}
-```
-
 ### 上传/重传项目要求文件（教师）
 
 PUT /api/v1/projects/{projectId}/requirement
@@ -74,7 +80,7 @@ PUT /api/v1/projects/{projectId}/requirement
 Form-data：
 
 ```
-file: xxx
+filename: xxx
 ```
 
 ### 删除项目（教师）
@@ -82,18 +88,19 @@ file: xxx
 DELETE /api/v1/projects/{projectID}
 
 
-## 实验报告操作
-
 ### 提交实验报告（学生）
 
 POST /api/v1/projects/{projectId}/submissions
 
 From-data:
 ```
-file: xxx
+filename: xxx
 ```
 
-学生ID将从token获取
+学生ID将从cookie获取
+
+## 实验报告操作
+
 
 ### 下载/预览实验报告
 
