@@ -137,6 +137,31 @@ func (p *ProjectRepo) QueryStuProject(studentID string) ([]domain.StudentProject
 	return result, nil
 }
 
+// QueryStuProjectByID 查询单个学生项目的当前信息（用于 AJAX 上传报告后刷新单张卡片）
+func (p *ProjectRepo) QueryStuProjectByID(studentID string, projectID uint) (*domain.StudentProjectInfo, error) {
+	if p.db == nil {
+		return nil, fmt.Errorf("QueryStuProjectByID: invalid database connection")
+	}
+	query := fmt.Sprintf("select c.courseName, p.projectID, p.projectName, p.startTime, p.deadline, p.isActive, srp.stuReportID "+
+		"from %s p "+
+		"join %s coff on p.offeringID = coff.offeringID "+
+		"join %s c on coff.courseID = c.courseID "+
+		"left join %s srp on p.projectID = srp.projectID and srp.studentID = ? "+
+		"where p.projectID = ?",
+		tabProject, tabCourseOffering, tabCourse, tabStuReport)
+	info := &domain.StudentProjectInfo{}
+	err := p.db.QueryRow(query, studentID, projectID).Scan(
+		&info.CourseName, &info.ProjectID, &info.ProjectName,
+		&info.StartTime, &info.CloseTime, &info.IsActive, &info.StuReportID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("QueryStuProjectByID(): %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("QueryStuProjectByID(): %w, %v", domain.ErrQuery, err)
+	}
+	return info, nil
+}
+
 // QueryTeacherProject 查询一个教师所管理的项目，包含项目所属班级、课程等信息
 func (p *ProjectRepo) QueryTeacherProject(teacherID string) ([]domain.TeacherProjectInfo, error) {
 	query := fmt.Sprintf("select c.courseName, coff.className, coff.offeringID, p.projectID, p.projectName, p.deadline, p.isActive "+
@@ -194,13 +219,13 @@ func (p *ProjectRepo) QueryOfferingInfo(offeringID uint) (courseName, className 
 	return courseName, className, nil
 }
 
-// AddProject 教师新建项目
-func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
+// AddProject 教师新建项目，返回新项目ID
+func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) (uint, error) {
 	if p.db == nil || project == nil {
-		return fmt.Errorf("AddProject: invalid input parameters")
+		return 0, fmt.Errorf("AddProject: invalid input parameters")
 	}
 
-	_, err := p.db.Exec(
+	res, err := p.db.Exec(
 		fmt.Sprintf("insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)", tabProject),
 		project.OfferingID,
 		project.ProjectName,
@@ -209,9 +234,30 @@ func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) error {
 		project.CloseTime,
 	)
 	if err != nil {
-		return fmt.Errorf("AddProject() insert failed: %w, %v", domain.ErrModify, err)
+		return 0, fmt.Errorf("AddProject() insert failed: %w, %v", domain.ErrModify, err)
 	}
-	return nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("AddProject() LastInsertId failed: %w, %v", domain.ErrModify, err)
+	}
+	return uint(id), nil
+}
+
+// QueryProjectByID 根据项目ID查询项目当前信息（用于切换状态后刷新片段）
+func (p *ProjectRepo) QueryProjectByID(projectID uint) (*domain.TeacherProjectInfo, error) {
+	if p.db == nil {
+		return nil, fmt.Errorf("QueryProjectByID: invalid database connection")
+	}
+	query := fmt.Sprintf("select projectName, deadline, isActive from %s where projectID = ?", tabProject)
+	info := &domain.TeacherProjectInfo{ProjectID: projectID}
+	err := p.db.QueryRow(query, projectID).Scan(&info.ProjectName, &info.CloseTime, &info.IsActive)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("QueryProjectByID(): %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("QueryProjectByID(): %w, %v", domain.ErrQuery, err)
+	}
+	return info, nil
 }
 
 // DelProject 教师删除项目
@@ -314,21 +360,25 @@ func (r *ReportRepo) QueryStuReportStatus(projectID uint) ([]domain.StuReportSta
 	return result, nil
 }
 
-// InsertStuReport 学生提交报告，报告表中插入新行
-func (r *ReportRepo) InsertStuReport(stuRp *domain.StuReportInfo) error {
+// InsertStuReport 学生提交报告，报告表中插入新行，返回新报告ID
+func (r *ReportRepo) InsertStuReport(stuRp *domain.StuReportInfo) (uint, error) {
 	if r.db == nil {
-		return fmt.Errorf("InsertStuReport: invalid database connection")
+		return 0, fmt.Errorf("InsertStuReport: invalid database connection")
 	}
-	_, err := r.db.Exec(
+	res, err := r.db.Exec(
 		fmt.Sprintf("insert into %s (studentID, projectID, reportFilePath, submitTime) values (?, ?, ?, ?)", tabStuReport),
 		stuRp.StudentID,
 		stuRp.ProjectID,
 		stuRp.ReportFilePath,
 		stuRp.SubmitTime)
 	if err != nil {
-		return fmt.Errorf("InsertStuReport(): %w, %v", domain.ErrModify, err)
+		return 0, fmt.Errorf("InsertStuReport(): %w, %v", domain.ErrModify, err)
 	}
-	return nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("InsertStuReport() LastInsertId: %w, %v", domain.ErrModify, err)
+	}
+	return uint(id), nil
 }
 
 // QueryStuReportFileAll 获取某项目下，所有学生的报告文件路径
