@@ -8,6 +8,50 @@ import (
 	"time"
 )
 
+func NewAuthService(authOp authOp) *AuthService {
+	return &AuthService{repoAuth: authOp}
+}
+
+func NewUserService(regOp registerOp) *UserService {
+	return &UserService{repoRegister: regOp}
+}
+
+func NewTeacherProjectService(tecPjOp teacherProjectOp, pubPjOp publicProjectOp, fs *FileService) *TeacherProjectService {
+	return &TeacherProjectService{
+		repoTecProject: tecPjOp,
+		repoPubProject: pubPjOp,
+		fs:             fs,
+	}
+}
+
+func NewStudentProjectService(stuPjOp studentProjectOp, pubPjOp publicProjectOp, fs *FileService) *StudentProjectService {
+	return &StudentProjectService{
+		repoStuProject: stuPjOp,
+		repoPubProject: pubPjOp,
+		fs:             fs,
+	}
+}
+
+func NewTeacherReportService(tecRpOp teacherReportOp, fs *FileService) *TeacherReportService {
+	return &TeacherReportService{
+		repoTecReport: tecRpOp,
+		fs:            fs,
+	}
+}
+
+func NewStudentReportService(stuRpOp studentReportOp, pjInfoOp projectInfoOp, stuInfoOp studentInfoOp, fs *FileService) *StudentReportService {
+	return &StudentReportService{
+		repoStuReport: stuRpOp,
+		repoProject:   pjInfoOp,
+		repoUser:      stuInfoOp,
+		fs:            fs,
+	}
+}
+
+func NewCourseService(courseOp courseOp) *CourseService {
+	return &CourseService{repoCourse: courseOp}
+}
+
 //=========================================================
 //	关于认证相关的业务，目前有：
 //	登录认证

@@ -25,9 +25,57 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// 暂定义的JWT密钥
-// TODO: JWT密钥获取
-var secret []byte
+func NewSessions(authService *service.AuthService, jwtSecret string) *Sessions {
+	return &Sessions{
+		auth:      authService,
+		jwtSecret: []byte(jwtSecret),
+	}
+}
+
+func NewHome(
+	tecPjService *service.TeacherProjectService,
+	stuPjService *service.StudentProjectService,
+	lgPageGen *html.LoginPageGenerator,
+	stuHomeGen *html.StuHomeGenerator,
+	tecHomeGen *html.TecHomeGenerator) *Home {
+	return &Home{
+		tecProjects: tecPjService,
+		stuProjects: stuPjService,
+		lgPage:      lgPageGen,
+		stuHome:     stuHomeGen,
+		tecHome:     tecHomeGen,
+	}
+}
+
+func NewOfferingClass(tecPjService *service.TeacherProjectService, tecHome *html.TecHomeGenerator) *OfferingClass {
+	return &OfferingClass{
+		tecProjects: tecPjService,
+		tecHome:     tecHome,
+	}
+}
+
+func NewProjects(
+	tecPjService *service.TeacherProjectService,
+	stuPjService *service.StudentProjectService,
+	tecRpService *service.TeacherReportService,
+	stuRpService *service.StudentReportService,
+	tecHomeGen *html.TecHomeGenerator,
+	stuHomeGen *html.StuHomeGenerator) *Projects {
+	return &Projects{
+		tecProjects: tecPjService,
+		stuProjects: stuPjService,
+		tecReports:  tecRpService,
+		stuReports:  stuRpService,
+		tecHome:     tecHomeGen,
+		stuHome:     stuHomeGen,
+	}
+}
+
+func NewSubmissions(tecRpService *service.TeacherReportService) *Submissions {
+	return &Submissions{
+		tecReports: tecRpService,
+	}
+}
 
 // contextKey 上层中间件与控制层之间传递身份信息的 context 键类型
 type contextKey string
@@ -53,7 +101,8 @@ func parseUintPath(r *http.Request, name string) (uint, error) {
 
 // Sessions 会话资源，即登录
 type Sessions struct {
-	auth *service.AuthService
+	auth      *service.AuthService
+	jwtSecret []byte
 }
 
 // genShortJWT 生成短期（30分钟）的JWT，
@@ -102,7 +151,7 @@ func (s *Sessions) Login(w http.ResponseWriter, r *http.Request) error {
 	authJwt, err := s.genShortJWT(
 		userInfo.Number,
 		role,
-		secret,
+		s.jwtSecret,
 	)
 	authJWTCk := http.Cookie{
 		Name:     "auth_token",

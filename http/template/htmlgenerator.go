@@ -11,6 +11,18 @@ import (
 	"LabSystem/internal/domain"
 )
 
+func NewLoginPageGenerator() *LoginPageGenerator {
+	return &LoginPageGenerator{}
+}
+
+func NewStuHomeGenerator() *StuHomeGenerator {
+	return &StuHomeGenerator{}
+}
+
+func NewTecHomeGenerator() *TecHomeGenerator {
+	return &TecHomeGenerator{}
+}
+
 var templates = htmltpl.Must(htmltpl.ParseGlob("html/*.html"))
 
 // LoginPageGenerator 返回登录页面。该页面无需额外构造，直接返回。

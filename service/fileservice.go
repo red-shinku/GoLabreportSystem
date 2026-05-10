@@ -10,6 +10,10 @@ import (
 	"path/filepath"
 )
 
+func NewFileService() *FileService {
+	return &FileService{}
+}
+
 // FileService 负责服务端本地的文件系统读写
 // 需要使用文件业务元数据
 type FileService struct {

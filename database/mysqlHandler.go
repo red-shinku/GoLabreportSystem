@@ -19,6 +19,22 @@ const (
 	tabStuReport      string = "StuReport"
 )
 
+func NewUsersRepo(db *sql.DB) *UsersRepo {
+	return &UsersRepo{db: db}
+}
+
+func NewProjectRepo(db *sql.DB) *ProjectRepo {
+	return &ProjectRepo{db: db}
+}
+
+func NewReportRepo(db *sql.DB) *ReportRepo {
+	return &ReportRepo{db: db}
+}
+
+func NewManCourseOfferRepo(db *sql.DB) *ManCourseOfferRepo {
+	return &ManCourseOfferRepo{db: db}
+}
+
 // UsersRepo 关于用户表的操作
 type UsersRepo struct {
 	db *sql.DB

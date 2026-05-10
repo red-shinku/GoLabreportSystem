@@ -11,15 +11,28 @@ import (
 
 type Router struct {
 	mux           *http.ServeMux
-	home          controller.Home
-	sessions      controller.Sessions
-	offeringClass controller.OfferingClass
-	projects      controller.Projects
-	submissions   controller.Submissions
+	home          *controller.Home
+	sessions      *controller.Sessions
+	offeringClass *controller.OfferingClass
+	projects      *controller.Projects
+	submissions   *controller.Submissions
 }
 
-func NewRouter(mux *http.ServeMux) *Router {
-	return &Router{mux: mux}
+func NewRouter(
+	mux *http.ServeMux,
+	home *controller.Home,
+	sessions *controller.Sessions,
+	offeringClass *controller.OfferingClass,
+	projects *controller.Projects,
+	submissions *controller.Submissions) *Router {
+	return &Router{
+		mux:           mux,
+		home:          home,
+		sessions:      sessions,
+		offeringClass: offeringClass,
+		projects:      projects,
+		submissions:   submissions,
+	}
 }
 
 func (r *Router) Init() {
