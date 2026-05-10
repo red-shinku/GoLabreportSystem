@@ -47,7 +47,7 @@ create table StudentCourse(
 --     参加的课程
     offeringID int unsigned not null,
 
-    FOREIGN KEY (offeringID) REFERENCES Course(offeringID) ON DELETE CASCADE
+    FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE,
     FOREIGN KEY (studentID) REFERENCES Users(number) ON DELETE CASCADE
 );
 
@@ -58,7 +58,7 @@ create table TeacherCourse(
 --     管理的课程
     offeringID int unsigned not null,
 
-    FOREIGN KEY (offeringID) REFERENCES Course(offeringID) ON DELETE CASCADE
+    FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE,
     FOREIGN KEY (teacherID) REFERENCES Users(number) ON DELETE CASCADE
 );
 
@@ -94,7 +94,8 @@ create table StuReport(
     reportFilePath varchar(128),
 --     提交时间
     submitTime datetime,
-    FOREIGN KEY (studentID) REFERENCES StudentCourse(studentID) ON DELETE CASCADE,
+--     FOREIGN KEY (studentID) REFERENCES StudentCourse(studentID) ON DELETE CASCADE,
+    FOREIGN KEY (studentID) REFERENCES Users(number) ON DELETE CASCADE,
     FOREIGN KEY (projectID) REFERENCES Project(projectID) ON DELETE CASCADE
 );
 
