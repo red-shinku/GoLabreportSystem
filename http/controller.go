@@ -8,6 +8,7 @@ package controller
 
 import (
 	"LabSystem/api"
+	"LabSystem/http/middleware"
 	"LabSystem/http/route"
 	html "LabSystem/http/template"
 	"LabSystem/http/view"
@@ -77,16 +78,6 @@ func NewSubmissions(tecRpService *service.TeacherReportService) *Submissions {
 	}
 }
 
-// contextKey 上层中间件与控制层之间传递身份信息的 context 键类型
-type contextKey string
-
-const (
-	// CtxKeyUserID 登录用户编号（学号/工号）
-	CtxKeyUserID contextKey = "userID"
-	// CtxKeyRole 登录用户身份（student / teacher / operator）
-	CtxKeyRole contextKey = "role"
-)
-
 // parseUintPath 从 URL 路径变量解析 uint ID，失败返回 400
 func parseUintPath(r *http.Request, name string) (uint, error) {
 	raw := r.PathValue(name)
@@ -120,6 +111,7 @@ func (s *Sessions) genShortJWT(userID string, role string, secret []byte) (strin
 		},
 	}
 
+	// TODO: 加入配置选项
 	// 创建 token（指定签名算法，HS256）
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
@@ -184,8 +176,8 @@ func (h *Home) LoginPage(w http.ResponseWriter, r *http.Request) error {
 // HomePage 根据解析到的cookie中的身份信息，返回对应的用户界面
 func (h *Home) HomePage(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	userID, okU := ctx.Value(CtxKeyUserID).(string)
-	role, okR := ctx.Value(CtxKeyRole).(string)
+	userID, okU := ctx.Value(middleware.CtxKeyUserID).(string)
+	role, okR := ctx.Value(middleware.CtxKeyRole).(string)
 	if !okU || !okR || userID == "" {
 		return httperr.WithStatus(
 			fmt.Errorf("Home.HomePage(): missing identity in context"),
@@ -359,7 +351,7 @@ func (p *Projects) UploadReport(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	studentID, ok := r.Context().Value(CtxKeyUserID).(string)
+	studentID, ok := r.Context().Value(middleware.CtxKeyUserID).(string)
 	if !ok || studentID == "" {
 		return httperr.WithStatus(
 			fmt.Errorf("Projects.UploadReport(): missing student id in context"),
