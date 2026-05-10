@@ -29,14 +29,20 @@ const (
 )
 
 type Config struct {
-	Ipaddr       string `json:"ip_addr" env:"IP_ADDR"`
-	Port         string `json:"port" env:"PORT"`
-	EnableTLS    bool   `json:"enable_tls" env:"ENABLE_TLS"`
-	DatabaseAddr string `json:"database_addr" env:"DATABASE_ADDR"`
+	Ipaddr    string `json:"ip_addr" env:"IP_ADDR"`
+	Port      string `json:"port" env:"PORT"`
+	EnableTLS bool   `json:"enable_tls" env:"ENABLE_TLS"`
 
-	// secret
+	// JWT secret
 	JWTSecret     string `env:"JWT_SECRET"`
 	JWTSecretFile string `json:"jwt_secret_file"`
+
+	//Database
+	DatabaseAddr       string `json:"database_addr" env:"DATABASE_ADDR"`
+	DatabasePort       string `json:"database_port" env:"DATABASE_PORT"`
+	DatabaseUser       string `json:"database_user" env:"DATABASE_USER"`
+	DatabasePasswd     string `env:"DATABASE_PASSWD"`
+	DatabasePasswdFile string `json:"database_passwd_file"`
 }
 
 func LoadJSONConfig(path string) Config {
@@ -60,7 +66,7 @@ func LoadEnvConfig(cfg *Config) {
 	}
 }
 
-func (c *Config) LoadSecret() error {
+func (c *Config) LoadJWTSecret() error {
 	// ENV 优先
 	if c.JWTSecret != "" {
 		return nil
@@ -74,8 +80,22 @@ func (c *Config) LoadSecret() error {
 		c.JWTSecret = strings.TrimSpace(string(b))
 		return nil
 	}
-
 	return errors.New("missing JWT secret")
+}
+
+func (c *Config) LoadDBPasswd() error {
+	if c.DatabasePasswd != "" {
+		return nil
+	}
+	if c.DatabasePasswdFile != "" {
+		b, err := os.ReadFile(c.DatabasePasswdFile)
+		if err != nil {
+			return err
+		}
+		c.DatabasePasswd = strings.TrimSpace(string(b))
+		return nil
+	}
+	return errors.New("missing database passwd")
 }
 
 func applyDefaults(c *Config) {
@@ -93,7 +113,11 @@ func LoadConfig() Config {
 	// 用环境变量配置覆盖
 	LoadEnvConfig(&cfg)
 	// 加载JWT密钥
-	if err := cfg.LoadSecret(); err != nil {
+	if err := cfg.LoadJWTSecret(); err != nil {
+		panic(err)
+	}
+	// 加载数据库密码
+	if err := cfg.LoadDBPasswd(); err != nil {
 		panic(err)
 	}
 	// 未配置选项设置默认值
@@ -117,7 +141,7 @@ func EnsureSchema(db *sql.DB) error {
 		return nil
 	}
 
-	log.Printf("schema %q not initialized, running %s", schemaName, initScriptPath)
+	log.Printf("[warnning] schema %q not initialized, running %s", schemaName, initScriptPath)
 	script, err := os.ReadFile(initScriptPath)
 	if err != nil {
 		return fmt.Errorf("read init script: %w", err)
@@ -167,23 +191,42 @@ func firstLine(s string) string {
 	return s
 }
 
-func main() {
-	cfg := LoadConfig()
-
-	//建立数据库连接
-	db, err := sql.Open("mysql", cfg.DatabaseAddr)
-	if err != nil {
-		log.Fatalf("open database: %v", err)
+// ConnectDB 生成DSN并建立数据库连接
+func ConnectDB(cfg *Config) {
+	dsn := fmt.Sprintf(
+		"%s:%s@tcp(%s:%s)/",
+		cfg.DatabaseUser, cfg.DatabasePasswd, cfg.DatabaseAddr, cfg.DatabasePort)
+	tempdb, errt := sql.Open("mysql", dsn)
+	if errt != nil {
+		log.Fatalf("open database: %v", errt)
 	}
-	defer db.Close()
-	if err := db.Ping(); err != nil {
+	if err := tempdb.Ping(); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
 
-	// 初始化数据库
-	if err := EnsureSchema(db); err != nil {
+	// 检查并初始化数据库
+	if err := EnsureSchema(tempdb); err != nil {
 		log.Fatalf("ensure schema: %v", err)
 	}
+	tempdb.Close()
+
+	dsnFinal := fmt.Sprintf("%s%s", dsn, schemaName)
+	var err error
+	db, err = sql.Open("mysql", dsnFinal)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+}
+
+var (
+	db *sql.DB
+)
+
+func main() {
+	cfg := LoadConfig()
+	//连接数据库
+	ConnectDB(&cfg)
+	defer db.Close()
 
 	middleware.Secret = []byte(cfg.JWTSecret)
 
