@@ -1,17 +1,30 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/caarlos0/env/v11"
+	"log"
+	"net/http"
 	"os"
 	"strings"
+
+	"github.com/caarlos0/env/v11"
+	_ "github.com/go-sql-driver/mysql"
+
+	"LabSystem/database"
+	controller "LabSystem/http"
+	"LabSystem/http/middleware"
+	server "LabSystem/http/router"
+	html "LabSystem/http/template"
+	"LabSystem/service"
 )
 
 type Config struct {
-	Ipaddr    string `json:"ipaddr" env:"IP_ADDR"`
-	Port      string `json:"port" env:"PORT"`
-	EnableTLS bool   `json:"enable_tls" env:"ENABLE_TLS"`
+	Ipaddr       string `json:"ip_addr" env:"IP_ADDR"`
+	Port         string `json:"port" env:"PORT"`
+	EnableTLS    bool   `json:"enable_tls" env:"ENABLE_TLS"`
+	DatabaseAddr string `json:"database_addr" env:"DATABASE_ADDR"`
 
 	// secret
 	JWTSecret     string `env:"JWT_SECRET"`
@@ -23,7 +36,6 @@ func LoadJSONConfig(path string) Config {
 
 	b, err := os.ReadFile(path)
 	if err != nil {
-		// 文件不存在可以允许（看你需求）
 		return cfg
 	}
 
@@ -83,5 +95,58 @@ func LoadConfig() Config {
 }
 
 func main() {
+	cfg := LoadConfig()
 
+	db, err := sql.Open("mysql", cfg.DatabaseAddr)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+	if err := db.Ping(); err != nil {
+		log.Fatalf("ping database: %v", err)
+	}
+
+	middleware.Secret = []byte(cfg.JWTSecret)
+
+	usersRepo := database.NewUsersRepo(db)
+	projectRepo := database.NewProjectRepo(db)
+	reportRepo := database.NewReportRepo(db)
+	manCourseOfferRepo := database.NewManCourseOfferRepo(db)
+	//FIXME: 补充课表导入功能
+	_ = manCourseOfferRepo
+
+	fileService := service.NewFileService()
+	authService := service.NewAuthService(usersRepo)
+	tecProjectService := service.NewTeacherProjectService(projectRepo, projectRepo, fileService)
+	stuProjectService := service.NewStudentProjectService(projectRepo, projectRepo, fileService)
+	tecReportService := service.NewTeacherReportService(reportRepo, fileService)
+	stuReportService := service.NewStudentReportService(reportRepo, projectRepo, usersRepo, fileService)
+
+	lgPageGen := html.NewLoginPageGenerator()
+	stuHomeGen := html.NewStuHomeGenerator()
+	tecHomeGen := html.NewTecHomeGenerator()
+
+	sessionsCtl := controller.NewSessions(authService, cfg.JWTSecret)
+	homeCtl := controller.NewHome(tecProjectService, stuProjectService, lgPageGen, stuHomeGen, tecHomeGen)
+	offeringClassCtl := controller.NewOfferingClass(tecProjectService, tecHomeGen)
+	projectsCtl := controller.NewProjects(tecProjectService, stuProjectService, tecReportService, stuReportService, tecHomeGen, stuHomeGen)
+	submissionsCtl := controller.NewSubmissions(tecReportService)
+
+	// 路由初始化
+	mux := http.NewServeMux()
+	router := server.NewRouter(mux, homeCtl, sessionsCtl, offeringClassCtl, projectsCtl, submissionsCtl)
+	router.Init()
+
+	addr := cfg.Ipaddr + ":" + cfg.Port
+	log.Printf("server listening on %s", addr)
+	if cfg.EnableTLS {
+		// TODO: 证书的管理
+		if err := http.ListenAndServeTLS(addr, "server.crt", "server.key", mux); err != nil {
+			log.Fatalf("serve tls: %v", err)
+		}
+		return
+	}
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("serve: %v", err)
+	}
 }
