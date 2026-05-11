@@ -1,0 +1,6 @@
+.gocache/
+.git/
+.idea/
+.gitignore
+*.key
+*.pass
