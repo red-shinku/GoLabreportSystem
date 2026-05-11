@@ -35,14 +35,14 @@ type Config struct {
 
 	// JWT secret
 	JWTSecret     string `env:"JWT_SECRET"`
-	JWTSecretFile string `json:"jwt_secret_file"`
+	JWTSecretFile string `json:"jwt_secret_file" env:"JWT_SECRET_FILE"`
 
 	//Database
 	DatabaseAddr       string `json:"database_addr" env:"DATABASE_ADDR"`
 	DatabasePort       string `json:"database_port" env:"DATABASE_PORT"`
 	DatabaseUser       string `json:"database_user" env:"DATABASE_USER"`
 	DatabasePasswd     string `env:"DATABASE_PASSWD"`
-	DatabasePasswdFile string `json:"database_passwd_file"`
+	DatabasePasswdFile string `json:"database_passwd_file" env:"DATABASE_PASSWD_FILE"`
 }
 
 func LoadJSONConfig(path string) Config {
@@ -100,7 +100,7 @@ func (c *Config) LoadDBPasswd() error {
 
 func applyDefaults(c *Config) {
 	if c.Ipaddr == "" {
-		c.Ipaddr = "127.0.0.1"
+		c.Ipaddr = "0.0.0.0"
 	}
 	if c.Port == "" {
 		c.Port = "8080"
@@ -192,6 +192,7 @@ func firstLine(s string) string {
 }
 
 // ConnectDB 生成DSN并建立数据库连接
+// TODO: 数据库连接池配置
 func ConnectDB(cfg *Config) {
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/",
