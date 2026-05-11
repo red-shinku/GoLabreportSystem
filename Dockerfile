@@ -18,8 +18,12 @@ WORKDIR /app
 # 仅复制二进制和默认配置
 COPY --from=builder /app/server /app/server
 COPY config.json /app/config.json
+COPY --from=builder /app/html /app/html
+COPY --from=builder /app/scripts /app/scripts
 
 # 容器内部可用 8080 8443 端口
 
 EXPOSE 8080 8443
-ENTRYPOINT ["/app/server"]
+ENTR
+
+YPOINT ["/app/server"]
