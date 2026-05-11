@@ -3,4 +3,9 @@
 .idea/
 .gitignore
 *.key
+*.pem
+*.crt
+*.cer
+*.csr
+*.der
 *.pass
