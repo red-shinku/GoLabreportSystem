@@ -1,5 +1,9 @@
 .idea/
 .gocache/
 *.key
-*.cret
+*.pem
+*.crt
+*.cer
+*.csr
+*.der
 labsystem
