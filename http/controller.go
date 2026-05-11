@@ -154,8 +154,9 @@ func (s *Sessions) Login(w http.ResponseWriter, r *http.Request) error {
 	}
 	http.SetCookie(w, &authJWTCk)
 
-	// 重定向到用户界面
-	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	// 使用 HTMX 重定向到用户界面
+	//http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	w.Header().Set("HX-Redirect", "/")
 	return nil
 }
 
