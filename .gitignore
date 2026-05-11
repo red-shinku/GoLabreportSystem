@@ -7,3 +7,5 @@
 *.csr
 *.der
 labsystem
+*.exe
+*.pass
