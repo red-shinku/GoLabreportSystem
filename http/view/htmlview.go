@@ -17,7 +17,9 @@ type HXAction struct {
 // 树状结构：课程列表 -> 班级列表 -> 项目列表
 
 type TecProjectViewWithUrl struct {
-	Courses []CourseTecItemWithUrl
+	// 导入课程信息表（教师端全局操作）
+	ImportCourse HXAction
+	Courses      []CourseTecItemWithUrl
 }
 
 type CourseTecItemWithUrl struct {
@@ -56,7 +58,9 @@ type ProjectTecItemWithUrl struct {
 }
 
 func BuildTecProjectViewWithUrl(serviceViews []domain.TeacherProjectView) *TecProjectViewWithUrl {
-	result := &TecProjectViewWithUrl{}
+	result := &TecProjectViewWithUrl{
+		ImportCourse: HXAction{route.CoursesURL(), "POST"},
+	}
 	for _, sv := range serviceViews {
 		courseItem := CourseTecItemWithUrl{CourseName: sv.CourseName}
 		for _, cls := range sv.Classes {
