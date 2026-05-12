@@ -275,6 +275,51 @@
     </div>
 
     <div class="container">
+        <!-- 导入课程信息表 -->
+        <div style="margin-bottom: 20px; padding: 15px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #4caf50;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: #2e7d32; font-size: 15px;">📋 批量导入课程信息</strong>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #555;">上传 Excel 表格，一键完成学生注册、课程创建、项目登记</p>
+                </div>
+                <button class="btn btn-success" onclick="toggleImportForm(this)">
+                    + 导入课程表
+                </button>
+            </div>
+
+            <!-- 导入表单 -->
+            <div class="form-inline" id="import-form">
+                <form hx-post="{{.ImportCourse.URL}}"
+                      hx-encoding="multipart/form-data"
+                      hx-on::after-request="if(event.detail.successful){alert('导入成功！页面将刷新。');location.reload();}else{alert('导入失败：'+event.detail.xhr.responseText);}">
+                    <div class="form-group">
+                        <label>Excel 文件 <span style="color: #999; font-size: 11px;">（表头：ID | SNO | Sname | 项目名...）</span></label>
+                        <input type="file" name="filename" required accept=".xlsx,.xls">
+                    </div>
+                    <div class="form-group">
+                        <label>课程名称 *</label>
+                        <input type="text" name="courseName" required placeholder="例如：数据库原理">
+                    </div>
+                    <div class="form-group">
+                        <label>班级名称 <span style="color: #999; font-size: 11px;">（可选，默认为 '-'）</span></label>
+                        <input type="text" name="className" placeholder="例如：2022-1">
+                    </div>
+                    <div class="form-group">
+                        <label>学期 *</label>
+                        <input type="text" name="term" required placeholder="例如：2025-2026-1">
+                    </div>
+                    <div class="form-group">
+                        <label>项目默认截止时间 *</label>
+                        <input type="datetime-local" name="closeTime" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-success">开始导入</button>
+                        <button type="button" class="btn btn-secondary" onclick="toggleImportForm(this.closest('#import-form'))">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         {{range .Courses}}
         <div class="course">
             <div class="course-header" onclick="toggleCourse(this)">
@@ -361,6 +406,11 @@
 
         function toggleUploadForm(element) {
             const form = element.closest('.project').querySelector('form.form-inline');
+            form.classList.toggle('show');
+        }
+
+        function toggleImportForm(element) {
+            const form = document.getElementById('import-form');
             form.classList.toggle('show');
         }
 
