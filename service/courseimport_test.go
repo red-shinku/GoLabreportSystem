@@ -75,7 +75,10 @@ func TestCourseImportService_Import_Orchestration(t *testing.T) {
 			id    string
 			offID uint
 		}
-		stuArgs     []struct{ id string; offID uint }
+		stuArgs []struct {
+			id    string
+			offID uint
+		}
 		projectArgs []struct {
 			offID uint
 			name  string
@@ -105,7 +108,10 @@ func TestCourseImportService_Import_Orchestration(t *testing.T) {
 				return nil
 			},
 			findOrInsertStudentCourseFn: func(studentID string, offeringID uint) error {
-				stuArgs = append(stuArgs, struct{ id string; offID uint }{studentID, offeringID})
+				stuArgs = append(stuArgs, struct {
+					id    string
+					offID uint
+				}{studentID, offeringID})
 				return nil
 			},
 		},
@@ -141,6 +147,9 @@ func TestCourseImportService_Import_Orchestration(t *testing.T) {
 		if u.Passwd != u.Number {
 			t.Fatalf("initial password must equal student number, got passwd=%q num=%q", u.Passwd, u.Number)
 		}
+	}
+	if registeredUsers[0].Name != "Alice" || registeredUsers[1].Name != "Bob" {
+		t.Fatalf("expected imported student names to be preserved, got %+v", registeredUsers)
 	}
 	if gotCourseName != "Database" {
 		t.Fatalf("unexpected course name: %q", gotCourseName)
@@ -202,6 +211,93 @@ func TestCourseImportService_Import_StopsOnFirstError(t *testing.T) {
 	if teacherCalled {
 		t.Fatal("teacher binding should not run after course-insert failure")
 	}
+}
+
+func TestCourseImportService_Import_StopsOnStudentCourseError(t *testing.T) {
+	wantErr := errors.New("bind student failed")
+	projectCalled := false
+
+	svc := NewCourseImportService(
+		stubSheetParser{parseFn: func(io.Reader) (*domain.SheetData, error) { return newSheet(), nil }},
+		stubUserRegisterRepo{insertNewUserBatchIgnoreFn: func(*[]domain.UserInfo) error { return nil }},
+		stubCourseRegisterRepo{
+			findOrInsertCourseFn:         func(string) (uint, error) { return 3, nil },
+			findOrInsertCourseOfferingFn: func(uint, string, string) (uint, error) { return 11, nil },
+			findOrInsertTeacherCourseFn:  func(string, uint) error { return nil },
+			findOrInsertStudentCourseFn: func(studentID string, offeringID uint) error {
+				if studentID == "20260002" && offeringID == 11 {
+					return wantErr
+				}
+				return nil
+			},
+		},
+		stubProjectRegisterRepo{
+			findOrInsertProjectFn: func(uint, string, time.Time, time.Time) (uint, error) {
+				projectCalled = true
+				return 0, nil
+			},
+		},
+	)
+
+	err := svc.Import(strings.NewReader("ignored"),
+		domain.NewImportCourseData("T001", "Db", "C", "T", time.Now()))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), `student "20260002"`) {
+		t.Fatalf("expected student context in error, got %v", err)
+	}
+	if projectCalled {
+		t.Fatal("project registration should not run after student-course binding failure")
+	}
+}
+
+func TestCourseImportService_Import_RejectsOversizedStudentFields(t *testing.T) {
+	t.Run("student number too long", func(t *testing.T) {
+		svc := NewCourseImportService(
+			stubSheetParser{parseFn: func(io.Reader) (*domain.SheetData, error) {
+				return domain.NewSheetData(
+					[]domain.StudentRow{{Number: "12345678901234567", Name: "Alice"}},
+					[]string{"Lab1"},
+				), nil
+			}},
+			stubUserRegisterRepo{insertNewUserBatchIgnoreFn: func(*[]domain.UserInfo) error {
+				t.Fatal("user repo should not be called")
+				return nil
+			}},
+			stubCourseRegisterRepo{},
+			stubProjectRegisterRepo{},
+		)
+
+		err := svc.Import(strings.NewReader("ignored"),
+			domain.NewImportCourseData("T001", "Db", "C", "T", time.Now()))
+		if !errors.Is(err, domain.ErrSheetFormat) {
+			t.Fatalf("expected ErrSheetFormat, got %v", err)
+		}
+	})
+
+	t.Run("student name too long", func(t *testing.T) {
+		svc := NewCourseImportService(
+			stubSheetParser{parseFn: func(io.Reader) (*domain.SheetData, error) {
+				return domain.NewSheetData(
+					[]domain.StudentRow{{Number: "20260001", Name: "abcdefghijklmnopq"}},
+					[]string{"Lab1"},
+				), nil
+			}},
+			stubUserRegisterRepo{insertNewUserBatchIgnoreFn: func(*[]domain.UserInfo) error {
+				t.Fatal("user repo should not be called")
+				return nil
+			}},
+			stubCourseRegisterRepo{},
+			stubProjectRegisterRepo{},
+		)
+
+		err := svc.Import(strings.NewReader("ignored"),
+			domain.NewImportCourseData("T001", "Db", "C", "T", time.Now()))
+		if !errors.Is(err, domain.ErrSheetFormat) {
+			t.Fatalf("expected ErrSheetFormat, got %v", err)
+		}
+	})
 }
 
 // strconv 局部替代，避免新增 import；测试中只用于把 uint 拼成断言字符串

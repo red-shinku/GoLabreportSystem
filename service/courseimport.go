@@ -2,8 +2,15 @@ package service
 
 import (
 	"LabSystem/internal/domain"
+	"fmt"
 	"io"
 	"time"
+	"unicode/utf8"
+)
+
+const (
+	userNumberMaxLen = 16
+	userNameMaxLen   = 16
 )
 
 // userRegisterOp 学生注册（幂等）
@@ -59,10 +66,9 @@ func (c *CourseImportService) Import(r io.Reader, data *domain.ImportCourseData)
 		data.ClassName = "-"
 	}
 
-	users := make([]domain.UserInfo, 0, len(sheet.Students))
-	for _, s := range sheet.Students {
-		// identity=1 学生；初始密码 = 学号
-		users = append(users, *domain.NewUserInfo(1, s.Number, s.Number))
+	users, err := buildImportUsers(sheet.Students)
+	if err != nil {
+		return err
 	}
 	if err := c.repoUsr.InsertNewUserBatchIgnore(&users); err != nil {
 		return err
@@ -80,10 +86,8 @@ func (c *CourseImportService) Import(r io.Reader, data *domain.ImportCourseData)
 		return err
 	}
 
-	for _, s := range sheet.Students {
-		if err := c.repoCrs.FindOrInsertStudentCourse(s.Number, offeringID); err != nil {
-			return err
-		}
+	if err := c.registerStudentCourses(sheet.Students, offeringID); err != nil {
+		return err
 	}
 
 	startTime := time.Now()
@@ -93,4 +97,45 @@ func (c *CourseImportService) Import(r io.Reader, data *domain.ImportCourseData)
 		}
 	}
 	return nil
+}
+
+func (c *CourseImportService) registerStudentCourses(students []domain.StudentRow, offeringID uint) error {
+	for _, student := range students {
+		if err := c.repoCrs.FindOrInsertStudentCourse(student.Number, offeringID); err != nil {
+			return fmt.Errorf(
+				"registerStudentCourses(): bind student %q to offering %d: %w",
+				student.Number,
+				offeringID,
+				err,
+			)
+		}
+	}
+	return nil
+}
+
+func buildImportUsers(students []domain.StudentRow) ([]domain.UserInfo, error) {
+	users := make([]domain.UserInfo, 0, len(students))
+	for _, s := range students {
+		if utf8.RuneCountInString(s.Number) > userNumberMaxLen {
+			return nil, fmt.Errorf(
+				"buildImportUsers(): %w: student number %q exceeds %d characters",
+				domain.ErrSheetFormat,
+				s.Number,
+				userNumberMaxLen,
+			)
+		}
+		if utf8.RuneCountInString(s.Name) > userNameMaxLen {
+			return nil, fmt.Errorf(
+				"buildImportUsers(): %w: student name %q exceeds %d characters",
+				domain.ErrSheetFormat,
+				s.Name,
+				userNameMaxLen,
+			)
+		}
+
+		user := domain.NewUserInfo(1, s.Number, s.Number)
+		user.Name = s.Name
+		users = append(users, *user)
+	}
+	return users, nil
 }
