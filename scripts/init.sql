@@ -15,7 +15,7 @@ create table Users(
 --     姓名
     name varchar(16),
 --     邮箱
-    mail varchar(32) unique not null,
+    mail varchar(32) unique,
 --     密码，加密存储
     passwd varchar(255) not null
 );
