@@ -19,6 +19,11 @@ func SessionsURL() string {
 	return APIBase + "/sessions"
 }
 
+// CoursesURL 课程资源集合：教师导入课程信息表（POST）
+func CoursesURL() string {
+	return APIBase + "/courses"
+}
+
 // OfferingClassesURL 班级资源集合
 func OfferingClassesURL() string {
 	return APIBase + "/offeringclass"
