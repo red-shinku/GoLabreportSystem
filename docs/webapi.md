@@ -22,6 +22,31 @@ set-cookie: jwt{user_id, identity}; path=/; httponly; samesite=lax;
 
 * /sessions 登录界面 
 
+## 课程资源
+
+* /api/v1/courses
+
+### 导入实验课信息表(导入excel表)
+
+POST /api/v1/courses
+
+身份：教师（JWT 提供 `teacherID`）。  
+请求体：`multipart/form-data`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `filename` | file | 课程信息表（xlsx）。首行表头固定为 `ID \| SNO \| Sname \| <项目名 1> \| <项目名 2> \| ...` |
+| `courseName` | string | 课程名（必填） |
+| `className` | string | 班级名；空字符串时服务端兜底为 `'-'` |
+| `term` | string | 学期标识（必填，如 `2025-2026-1`） |
+| `closeTime` | string | 项目默认截止时间（RFC3339） |
+
+返回：
+- 201：导入完成。已存在的学生 / 课程 / 开课 / 选课 / 项目复用，不报错。
+- 400：表单字段缺失、closeTime 格式非法、Excel 表头/项目列异常（`ErrSheetFormat`）。
+- 401：未登录。
+- 500：数据库查询或写入失败。
+
 ## 班级资源
 
 * /api/v1/offeringclass
