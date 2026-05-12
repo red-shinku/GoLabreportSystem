@@ -431,8 +431,9 @@ func NewCourses(importer *service.CourseImportService) *Courses {
 }
 
 // ImportCourse 教师上传课程信息表（Excel）
-// multipart 表单字段：filename(file), courseName, className, term, closeTime(RFC3339)
-// className 缺省时由 service 兜底为 '-'
+// multipart 表单字段：filename(file), courseName, className, term, closeTime
+// closeTime 使用 HTML datetime-local 格式（2006-01-02T15:04），按服务器本地时区解析；
+// 兼容带秒格式 2006-01-02T15:04:05。className 缺省时由 service 兜底为 '-'
 func (c *Courses) ImportCourse(w http.ResponseWriter, r *http.Request) error {
 	teacherID, ok := r.Context().Value(middleware.CtxKeyUserID).(string)
 	if !ok || teacherID == "" {
@@ -451,7 +452,14 @@ func (c *Courses) ImportCourse(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer file.Close()
 
-	closeTime, err := time.Parse(time.RFC3339, r.FormValue("closeTime"))
+	closeTimeStr := r.FormValue("closeTime")
+	closeTime, err := time.ParseInLocation("2006-01-02T15:04", closeTimeStr, time.Local)
+	if err != nil {
+		closeTime, err = time.ParseInLocation("2006-01-02T15:04:05", closeTimeStr, time.Local)
+	}
+	if err != nil {
+		closeTime, err = time.Parse(time.RFC3339, closeTimeStr)
+	}
 	if err != nil {
 		return httperr.WithStatus(
 			fmt.Errorf("Courses.ImportCourse(): closeTime: %v", err),
