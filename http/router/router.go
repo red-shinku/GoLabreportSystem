@@ -16,6 +16,7 @@ type Router struct {
 	offeringClass *controller.OfferingClass
 	projects      *controller.Projects
 	submissions   *controller.Submissions
+	courses       *controller.Courses
 }
 
 func NewRouter(
@@ -24,7 +25,8 @@ func NewRouter(
 	sessions *controller.Sessions,
 	offeringClass *controller.OfferingClass,
 	projects *controller.Projects,
-	submissions *controller.Submissions) *Router {
+	submissions *controller.Submissions,
+	courses *controller.Courses) *Router {
 	return &Router{
 		mux:           mux,
 		home:          home,
@@ -32,6 +34,7 @@ func NewRouter(
 		offeringClass: offeringClass,
 		projects:      projects,
 		submissions:   submissions,
+		courses:       courses,
 	}
 }
 
@@ -56,6 +59,9 @@ func (r *Router) Init() {
 
 	// 会话（登录）
 	r.mux.HandleFunc("POST /api/v1/sessions", pub(r.sessions.Login))
+
+	// 课程资源
+	r.mux.HandleFunc("POST /api/v1/courses", auth(r.courses.ImportCourse))
 
 	// 班级资源
 	r.mux.HandleFunc("POST /api/v1/offeringclass/{offeringId}", auth(r.offeringClass.CreateProject))
