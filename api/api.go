@@ -43,6 +43,16 @@ type ReportFileFormRequest struct {
 	Filename string `json:"filename"`
 }
 
+// CoursesImportRequest 教师导入课程信息表的 multipart 表单字段说明
+// 实际取值由 controller 通过 r.FormFile / r.FormValue 完成
+type CoursesImportRequest struct {
+	Filename   string    `json:"filename"`
+	CourseName string    `json:"courseName"`
+	ClassName  string    `json:"className"`
+	Term       string    `json:"term"`
+	CloseTime  time.Time `json:"closeTime"`
+}
+
 // roleMap 身份码到身份的映射表，用于设置cookie
 var roleMap = map[uint8]string{
 	1: "student",
