@@ -52,7 +52,7 @@ DATABASE_PASSWD:数据库用户密码
 
 构建实验报告系统镜像，在项目根目录：
 ```
-docker build . -t labsys:v0.1
+docker build . -t labsys:v0.2
 ```
 
 启动实验报告系统的容器（示例）：
@@ -67,7 +67,7 @@ docker run -d `
   -v "$(pwd)/jwt.key:/app/jwt.key:ro" `
   -v "$(pwd)/db.pass:/app/db.pass:ro" `
   -v "$(pwd)/config.json:/app/config.json" `
-  labsys:v0.1
+  labsys:v0.2
 ```
 
 或使用 docker compose：  
@@ -77,7 +77,12 @@ docker run -d `
 
 在项目根目录运行编译：
 ```
-go build -o <文件名>
+go build -o labsys
+```
+填写配置后运行：
+
+```
+./labsys
 ```
 
 ## 基准测试
@@ -92,4 +97,5 @@ go build -o <文件名>
 
 ## 注意事项
 
-1. 启动前需确保数据库服务正常运行。
+1. 启动前需确保数据库服务正常运行。  
+2. 关于学生账户的注册方式：教师在导入课程信息表时，服务端会自动提取其中的学生信息，做幂等注册，密码默认与学号相同；在这之后，才完成课程信息的导入。目前对于以这种方式批量导入的课程下的项目，无法做到设定不同的截止时间。
