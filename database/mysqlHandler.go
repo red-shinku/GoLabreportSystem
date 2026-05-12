@@ -75,9 +75,10 @@ func (u *UsersRepo) InsertNewUser(user *domain.UserInfo) error {
 		return fmt.Errorf("InsertNewUser: invalid input parameters")
 	}
 	_, err := u.db.Exec(
-		fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers),
+		fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers),
 		user.Identity,
 		user.Number,
+		user.Name,
 		user.Passwd,
 	)
 	if err != nil {
@@ -93,14 +94,14 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 		return fmt.Errorf("InsertNewUserBatch: invalid input parameters")
 	}
 
-	stmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers))
+	stmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers))
 	if err != nil {
 		return fmt.Errorf("InsertNewUserBatch() prepare failed: %w, %v", domain.ErrModify, err)
 	}
 	defer stmt.Close()
 
 	for _, user := range *users {
-		_, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
+		_, err := stmt.Exec(user.Identity, user.Number, user.Name, user.Passwd)
 		if err != nil {
 			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", domain.ErrModify, err)
 		}
@@ -108,8 +109,8 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 	return nil
 }
 
-// InsertNewUserBatchIgnore 批量插入新用户；依赖 Users.number 的 UNIQUE 约束
-// 已存在的学号/工号自动跳过（INSERT IGNORE），不返回错误
+// InsertNewUserBatchIgnore 批量插入新用户；已存在的学号/工号自动跳过
+// 若已有记录缺少姓名，则使用导入表中的姓名回填；其它写库异常直接返回
 // FIXME: 使用事务
 func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 	if u.db == nil || users == nil {
@@ -119,15 +120,41 @@ func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 		return nil
 	}
 
-	stmt, err := u.db.Prepare(fmt.Sprintf("insert ignore into %s (identity, number, passwd) values (?, ?, ?)", tabUsers))
+	insertStmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers))
 	if err != nil {
 		return fmt.Errorf("InsertNewUserBatchIgnore() prepare failed: %w, %v", domain.ErrModify, err)
 	}
-	defer stmt.Close()
+	defer insertStmt.Close()
+
+	updateStmt, err := u.db.Prepare(fmt.Sprintf(
+		"update %s set name = ? where number = ? and (name is null or name = '')",
+		tabUsers,
+	))
+	if err != nil {
+		return fmt.Errorf("InsertNewUserBatchIgnore() prepare update failed: %w, %v", domain.ErrModify, err)
+	}
+	defer updateStmt.Close()
 
 	for _, user := range *users {
-		if _, err := stmt.Exec(user.Identity, user.Number, user.Passwd); err != nil {
-			return fmt.Errorf("InsertNewUserBatchIgnore() execute failed: %w, %v", domain.ErrModify, err)
+		var dummy int
+		err := u.db.QueryRow(
+			fmt.Sprintf("select 1 from %s where number = ?", tabUsers),
+			user.Number,
+		).Scan(&dummy)
+		switch {
+		case err == nil:
+			if user.Name == "" {
+				continue
+			}
+			if _, err := updateStmt.Exec(user.Name, user.Number); err != nil {
+				return fmt.Errorf("InsertNewUserBatchIgnore() update failed: %w, %v", domain.ErrModify, err)
+			}
+		case errors.Is(err, sql.ErrNoRows):
+			if _, err := insertStmt.Exec(user.Identity, user.Number, user.Name, user.Passwd); err != nil {
+				return fmt.Errorf("InsertNewUserBatchIgnore() execute failed: %w, %v", domain.ErrModify, err)
+			}
+		default:
+			return fmt.Errorf("InsertNewUserBatchIgnore() query failed: %w, %v", domain.ErrQuery, err)
 		}
 	}
 	return nil
@@ -168,7 +195,7 @@ func (p *ProjectRepo) QueryStuProject(studentID string) ([]domain.StudentProject
 		"join %s coff on stuc.offeringID = coff.offeringID "+
 		"join %s c on coff.courseID = c.courseID "+
 		"join %s p on coff.offeringID = p.offeringID "+
-		"join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
+		"left join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
 		"where stuc.studentID = ?",
 		tabStudentCourse, tabCourseOffering, tabCourse, tabProject, tabStuReport)
 	scanFunc := func(rows *sql.Rows, row *domain.StudentProjectInfo) error {

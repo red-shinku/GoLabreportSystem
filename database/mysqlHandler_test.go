@@ -46,8 +46,16 @@ func userStudentNameSQL() string {
 	return fmt.Sprintf("select name from %s where number = ?", tabUsers)
 }
 
+func findUserByNumberSQL() string {
+	return fmt.Sprintf("select 1 from %s where number = ?", tabUsers)
+}
+
 func insertUserSQL() string {
-	return fmt.Sprintf("insert into %s (identity, number, passwd) values (?, ?, ?)", tabUsers)
+	return fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers)
+}
+
+func updateUserNameWhenEmptySQL() string {
+	return fmt.Sprintf("update %s set name = ? where number = ? and (name is null or name = '')", tabUsers)
 }
 
 func changePasswordSQL() string {
@@ -64,7 +72,7 @@ func queryStuProjectSQL() string {
 		"join %s coff on stuc.offeringID = coff.offeringID "+
 		"join %s c on coff.courseID = c.courseID "+
 		"join %s p on coff.offeringID = p.offeringID "+
-		"join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
+		"left join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
 		"where stuc.studentID = ?",
 		tabStudentCourse, tabCourseOffering, tabCourse, tabProject, tabStuReport)
 }
@@ -151,10 +159,6 @@ func queryStuReportStatusSQL() string {
 		"left join %s srp on p.projectID = srp.projectID and stuc.studentID = srp.studentID "+
 		"where p.projectID = ?",
 		tabStudentCourse, tabCourseOffering, tabProject, tabStuReport)
-}
-
-func insertUserIgnoreSQL() string {
-	return fmt.Sprintf("insert ignore into %s (identity, number, passwd) values (?, ?, ?)", tabUsers)
 }
 
 func findProjectSQL() string {
@@ -284,11 +288,12 @@ func TestUsersRepo_InsertNewUser(t *testing.T) {
 		user := &domain.UserInfo{
 			Identity: 1,
 			Number:   "20260001",
+			Name:     "Alice",
 			Passwd:   "pass",
 		}
 
 		mock.ExpectExec(regexp.QuoteMeta(insertUserSQL())).
-			WithArgs(user.Identity, user.Number, user.Passwd).
+			WithArgs(user.Identity, user.Number, user.Name, user.Passwd).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		repo := &UsersRepo{db: db}
@@ -306,11 +311,12 @@ func TestUsersRepo_InsertNewUser(t *testing.T) {
 		user := &domain.UserInfo{
 			Identity: 1,
 			Number:   "20260002",
+			Name:     "Bob",
 			Passwd:   "pass",
 		}
 
 		mock.ExpectExec(regexp.QuoteMeta(insertUserSQL())).
-			WithArgs(user.Identity, user.Number, user.Passwd).
+			WithArgs(user.Identity, user.Number, user.Name, user.Passwd).
 			WillReturnError(errors.New("insert failed"))
 
 		repo := &UsersRepo{db: db}
@@ -336,16 +342,16 @@ func TestUsersRepo_InsertNewUserBatch(t *testing.T) {
 		defer db.Close()
 
 		users := []domain.UserInfo{
-			{Identity: 1, Number: "20260001", Passwd: "p1"},
-			{Identity: 2, Number: "20260002", Passwd: "p2"},
+			{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p1"},
+			{Identity: 2, Number: "20260002", Name: "Bob", Passwd: "p2"},
 		}
 
 		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
 		prep.ExpectExec().
-			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
+			WithArgs(users[0].Identity, users[0].Number, users[0].Name, users[0].Passwd).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		prep.ExpectExec().
-			WithArgs(users[1].Identity, users[1].Number, users[1].Passwd).
+			WithArgs(users[1].Identity, users[1].Number, users[1].Name, users[1].Passwd).
 			WillReturnResult(sqlmock.NewResult(2, 1))
 
 		repo := &UsersRepo{db: db}
@@ -360,7 +366,7 @@ func TestUsersRepo_InsertNewUserBatch(t *testing.T) {
 		db, mock := newMockDB(t)
 		defer db.Close()
 
-		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Passwd: "p1"}}
+		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p1"}}
 		mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL())).
 			WillReturnError(errors.New("prepare failed"))
 
@@ -378,16 +384,16 @@ func TestUsersRepo_InsertNewUserBatch(t *testing.T) {
 		defer db.Close()
 
 		users := []domain.UserInfo{
-			{Identity: 1, Number: "20260001", Passwd: "p1"},
-			{Identity: 2, Number: "20260002", Passwd: "p2"},
+			{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p1"},
+			{Identity: 2, Number: "20260002", Name: "Bob", Passwd: "p2"},
 		}
 
 		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
 		prep.ExpectExec().
-			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
+			WithArgs(users[0].Identity, users[0].Number, users[0].Name, users[0].Passwd).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		prep.ExpectExec().
-			WithArgs(users[1].Identity, users[1].Number, users[1].Passwd).
+			WithArgs(users[1].Identity, users[1].Number, users[1].Name, users[1].Passwd).
 			WillReturnError(errors.New("exec failed"))
 
 		repo := &UsersRepo{db: db}
@@ -483,7 +489,9 @@ func TestProjectRepo_QueryStuProject(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"courseName", "projectID", "projectName", "startTime", "deadline", "isActive", "stuReportID",
-	}).AddRow("Go Basics", int64(1001), "Lab1", now, later, true, int64(9001))
+	}).
+		AddRow("Go Basics", int64(1001), "Lab1", now, later, true, int64(9001)).
+		AddRow("Go Basics", int64(1002), "Lab2", now, later, false, nil)
 
 	mock.ExpectQuery(regexp.QuoteMeta(queryStuProjectSQL())).
 		WithArgs("20260001").
@@ -494,11 +502,14 @@ func TestProjectRepo_QueryStuProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(got))
+	if len(got) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(got))
 	}
 	if got[0].CourseName != "Go Basics" || got[0].ProjectName != "Lab1" || got[0].IsActive != true {
 		t.Fatalf("unexpected row: %+v", got[0])
+	}
+	if got[1].ProjectName != "Lab2" || got[1].StuReportID.Valid {
+		t.Fatalf("expected unsubmitted project to remain visible, got %+v", got[1])
 	}
 
 	mustExpectations(t, mock)
@@ -1063,17 +1074,25 @@ func TestUsersRepo_InsertNewUserBatchIgnore(t *testing.T) {
 		defer db.Close()
 
 		users := []domain.UserInfo{
-			{Identity: 1, Number: "20260001", Passwd: "20260001"},
-			{Identity: 1, Number: "20260002", Passwd: "20260002"},
+			{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "20260001"},
+			{Identity: 1, Number: "20260002", Name: "Bob", Passwd: "20260002"},
 		}
 
-		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserIgnoreSQL()))
-		prep.ExpectExec().
-			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
+		insertPrep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
+		updatePrep := mock.ExpectPrepare(regexp.QuoteMeta(updateUserNameWhenEmptySQL()))
+
+		mock.ExpectQuery(regexp.QuoteMeta(findUserByNumberSQL())).
+			WithArgs(users[0].Number).
+			WillReturnError(sql.ErrNoRows)
+		insertPrep.ExpectExec().
+			WithArgs(users[0].Identity, users[0].Number, users[0].Name, users[0].Passwd).
 			WillReturnResult(sqlmock.NewResult(1, 1))
-		prep.ExpectExec().
-			WithArgs(users[1].Identity, users[1].Number, users[1].Passwd).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery(regexp.QuoteMeta(findUserByNumberSQL())).
+			WithArgs(users[1].Number).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+		updatePrep.ExpectExec().
+			WithArgs(users[1].Name, users[1].Number).
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		repo := &UsersRepo{db: db}
 		if err := repo.InsertNewUserBatchIgnore(&users); err != nil {
@@ -1083,15 +1102,60 @@ func TestUsersRepo_InsertNewUserBatchIgnore(t *testing.T) {
 		mustExpectations(t, mock)
 	})
 
-	t.Run("exec error", func(t *testing.T) {
+	t.Run("query error", func(t *testing.T) {
 		db, mock := newMockDB(t)
 		defer db.Close()
 
-		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Passwd: "p"}}
-		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserIgnoreSQL()))
-		prep.ExpectExec().
-			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
-			WillReturnError(errors.New("dup"))
+		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p"}}
+		mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
+		mock.ExpectPrepare(regexp.QuoteMeta(updateUserNameWhenEmptySQL()))
+		mock.ExpectQuery(regexp.QuoteMeta(findUserByNumberSQL())).
+			WithArgs(users[0].Number).
+			WillReturnError(errors.New("db down"))
+
+		repo := &UsersRepo{db: db}
+		err := repo.InsertNewUserBatchIgnore(&users)
+		if err == nil || !errors.Is(err, domain.ErrQuery) {
+			t.Fatalf("expected ErrQuery, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p"}}
+		insertPrep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
+		mock.ExpectPrepare(regexp.QuoteMeta(updateUserNameWhenEmptySQL()))
+		mock.ExpectQuery(regexp.QuoteMeta(findUserByNumberSQL())).
+			WithArgs(users[0].Number).
+			WillReturnError(sql.ErrNoRows)
+		insertPrep.ExpectExec().
+			WithArgs(users[0].Identity, users[0].Number, users[0].Name, users[0].Passwd).
+			WillReturnError(errors.New("insert failed"))
+
+		repo := &UsersRepo{db: db}
+		err := repo.InsertNewUserBatchIgnore(&users)
+		if err == nil || !errors.Is(err, domain.ErrModify) {
+			t.Fatalf("expected ErrModify, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Name: "Alice", Passwd: "p"}}
+		mock.ExpectPrepare(regexp.QuoteMeta(insertUserSQL()))
+		updatePrep := mock.ExpectPrepare(regexp.QuoteMeta(updateUserNameWhenEmptySQL()))
+		mock.ExpectQuery(regexp.QuoteMeta(findUserByNumberSQL())).
+			WithArgs(users[0].Number).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+		updatePrep.ExpectExec().
+			WithArgs(users[0].Name, users[0].Number).
+			WillReturnError(errors.New("update failed"))
 
 		repo := &UsersRepo{db: db}
 		err := repo.InsertNewUserBatchIgnore(&users)
@@ -1338,4 +1402,3 @@ func TestCourseRepo_FindOrInsertStudentCourse(t *testing.T) {
 		mustExpectations(t, mock)
 	})
 }
-
