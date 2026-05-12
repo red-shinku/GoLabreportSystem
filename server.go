@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v11"
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 
 	"LabSystem/database"
 	controller "LabSystem/http"
@@ -191,12 +193,22 @@ func firstLine(s string) string {
 	return s
 }
 
+func buildMySQLDSN(cfg *Config, dbName string) string {
+	return (&mysql.Config{
+		User:      cfg.DatabaseUser,
+		Passwd:    cfg.DatabasePasswd,
+		Net:       "tcp",
+		Addr:      net.JoinHostPort(cfg.DatabaseAddr, cfg.DatabasePort),
+		DBName:    dbName,
+		ParseTime: true,
+		Loc:       time.Local,
+	}).FormatDSN()
+}
+
 // ConnectDB 生成DSN并建立数据库连接
 // TODO: 数据库连接池配置
 func ConnectDB(cfg *Config) {
-	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/",
-		cfg.DatabaseUser, cfg.DatabasePasswd, cfg.DatabaseAddr, cfg.DatabasePort)
+	dsn := buildMySQLDSN(cfg, "")
 	tempdb, errt := sql.Open("mysql", dsn)
 	if errt != nil {
 		log.Fatalf("open database: %v", errt)
@@ -211,7 +223,7 @@ func ConnectDB(cfg *Config) {
 	}
 	tempdb.Close()
 
-	dsnFinal := fmt.Sprintf("%s%s", dsn, schemaName)
+	dsnFinal := buildMySQLDSN(cfg, schemaName)
 	var err error
 	db, err = sql.Open("mysql", dsnFinal)
 	if err != nil {
