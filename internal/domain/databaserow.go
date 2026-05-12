@@ -22,6 +22,7 @@ var (
 type UserInfo struct {
 	Identity uint8
 	Number   string
+	Name     string
 	Passwd   string
 }
 
