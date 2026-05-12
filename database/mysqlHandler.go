@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -33,6 +35,10 @@ func NewReportRepo(db *sql.DB) *ReportRepo {
 
 func NewManCourseOfferRepo(db *sql.DB) *ManCourseOfferRepo {
 	return &ManCourseOfferRepo{db: db}
+}
+
+func NewCourseRepo(db *sql.DB) *CourseRepo {
+	return &CourseRepo{db: db}
 }
 
 // UsersRepo 关于用户表的操作
@@ -97,6 +103,31 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 		_, err := stmt.Exec(user.Identity, user.Number, user.Passwd)
 		if err != nil {
 			return fmt.Errorf("InsertNewUserBatch() execute failed: %w, %v", domain.ErrModify, err)
+		}
+	}
+	return nil
+}
+
+// InsertNewUserBatchIgnore 批量插入新用户；依赖 Users.number 的 UNIQUE 约束
+// 已存在的学号/工号自动跳过（INSERT IGNORE），不返回错误
+// FIXME: 使用事务
+func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
+	if u.db == nil || users == nil {
+		return fmt.Errorf("InsertNewUserBatchIgnore: invalid input parameters")
+	}
+	if len(*users) == 0 {
+		return nil
+	}
+
+	stmt, err := u.db.Prepare(fmt.Sprintf("insert ignore into %s (identity, number, passwd) values (?, ?, ?)", tabUsers))
+	if err != nil {
+		return fmt.Errorf("InsertNewUserBatchIgnore() prepare failed: %w, %v", domain.ErrModify, err)
+	}
+	defer stmt.Close()
+
+	for _, user := range *users {
+		if _, err := stmt.Exec(user.Identity, user.Number, user.Passwd); err != nil {
+			return fmt.Errorf("InsertNewUserBatchIgnore() execute failed: %w, %v", domain.ErrModify, err)
 		}
 	}
 	return nil
@@ -255,6 +286,39 @@ func (p *ProjectRepo) AddProject(project *domain.ProjectInfo) (uint, error) {
 	id, err := res.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("AddProject() LastInsertId failed: %w, %v", domain.ErrModify, err)
+	}
+	return uint(id), nil
+}
+
+// FindOrInsertProject 若(offeringID, projectName)已存在则返回其ID，否则插入并返回新ID
+// 用于课程导入时对项目条目做幂等写入
+func (p *ProjectRepo) FindOrInsertProject(offeringID uint, projectName string, startTime, deadline time.Time) (uint, error) {
+	if p.db == nil {
+		return 0, fmt.Errorf("FindOrInsertProject: invalid database connection")
+	}
+
+	var projectID uint
+	err := p.db.QueryRow(
+		fmt.Sprintf("select projectID from %s where offeringID = ? and projectName = ?", tabProject),
+		offeringID, projectName,
+	).Scan(&projectID)
+	if err == nil {
+		return projectID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("FindOrInsertProject() query: %w, %v", domain.ErrQuery, err)
+	}
+
+	res, err := p.db.Exec(
+		fmt.Sprintf("insert into %s (offeringID, projectName, projectFilePath, startTime, deadline) values (?, ?, ?, ?, ?)", tabProject),
+		offeringID, projectName, "", startTime, deadline,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertProject() insert: %w, %v", domain.ErrModify, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertProject() LastInsertId: %w, %v", domain.ErrModify, err)
 	}
 	return uint(id), nil
 }
@@ -435,6 +499,130 @@ func (mco *ManCourseOfferRepo) InsertStuCourseOfferBatch(courses *[]domain.Stude
 		if err != nil {
 			return fmt.Errorf("InsertStuCourseOfferBatch(): %w, %v", domain.ErrModify, err)
 		}
+	}
+	return nil
+}
+
+// CourseRepo 课程、开课、教师授课、学生选课的UPSERT操作集合
+// 服务于教师"课程信息表"导入业务
+type CourseRepo struct {
+	db *sql.DB
+}
+
+// FindOrInsertCourse 按课程名查找；不存在则插入并返回新ID
+func (c *CourseRepo) FindOrInsertCourse(name string) (uint, error) {
+	if c.db == nil {
+		return 0, fmt.Errorf("FindOrInsertCourse: invalid database connection")
+	}
+
+	var courseID uint
+	err := c.db.QueryRow(
+		fmt.Sprintf("select courseID from %s where courseName = ?", tabCourse),
+		name,
+	).Scan(&courseID)
+	if err == nil {
+		return courseID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("FindOrInsertCourse() query: %w, %v", domain.ErrQuery, err)
+	}
+
+	res, err := c.db.Exec(
+		fmt.Sprintf("insert into %s (courseName) values (?)", tabCourse),
+		name,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertCourse() insert: %w, %v", domain.ErrModify, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertCourse() LastInsertId: %w, %v", domain.ErrModify, err)
+	}
+	return uint(id), nil
+}
+
+// FindOrInsertCourseOffering 按(courseID, className, term)定位开课记录；不存在则插入
+func (c *CourseRepo) FindOrInsertCourseOffering(courseID uint, className, term string) (uint, error) {
+	if c.db == nil {
+		return 0, fmt.Errorf("FindOrInsertCourseOffering: invalid database connection")
+	}
+
+	var offeringID uint
+	err := c.db.QueryRow(
+		fmt.Sprintf("select offeringID from %s where courseID = ? and className = ? and term = ?", tabCourseOffering),
+		courseID, className, term,
+	).Scan(&offeringID)
+	if err == nil {
+		return offeringID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("FindOrInsertCourseOffering() query: %w, %v", domain.ErrQuery, err)
+	}
+
+	res, err := c.db.Exec(
+		fmt.Sprintf("insert into %s (courseID, className, term) values (?, ?, ?)", tabCourseOffering),
+		courseID, className, term,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertCourseOffering() insert: %w, %v", domain.ErrModify, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("FindOrInsertCourseOffering() LastInsertId: %w, %v", domain.ErrModify, err)
+	}
+	return uint(id), nil
+}
+
+// FindOrInsertTeacherCourse 把教师绑定到开课上；已绑定则跳过
+func (c *CourseRepo) FindOrInsertTeacherCourse(teacherID string, offeringID uint) error {
+	if c.db == nil {
+		return fmt.Errorf("FindOrInsertTeacherCourse: invalid database connection")
+	}
+
+	var dummy int
+	err := c.db.QueryRow(
+		fmt.Sprintf("select 1 from %s where teacherID = ? and offeringID = ?", tabTeacherCourse),
+		teacherID, offeringID,
+	).Scan(&dummy)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("FindOrInsertTeacherCourse() query: %w, %v", domain.ErrQuery, err)
+	}
+
+	if _, err := c.db.Exec(
+		fmt.Sprintf("insert into %s (teacherID, offeringID) values (?, ?)", tabTeacherCourse),
+		teacherID, offeringID,
+	); err != nil {
+		return fmt.Errorf("FindOrInsertTeacherCourse() insert: %w, %v", domain.ErrModify, err)
+	}
+	return nil
+}
+
+// FindOrInsertStudentCourse 把学生绑定到开课上；已绑定则跳过
+func (c *CourseRepo) FindOrInsertStudentCourse(studentID string, offeringID uint) error {
+	if c.db == nil {
+		return fmt.Errorf("FindOrInsertStudentCourse: invalid database connection")
+	}
+
+	var dummy int
+	err := c.db.QueryRow(
+		fmt.Sprintf("select 1 from %s where studentID = ? and offeringID = ?", tabStudentCourse),
+		studentID, offeringID,
+	).Scan(&dummy)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("FindOrInsertStudentCourse() query: %w, %v", domain.ErrQuery, err)
+	}
+
+	if _, err := c.db.Exec(
+		fmt.Sprintf("insert into %s (studentID, offeringID) values (?, ?)", tabStudentCourse),
+		studentID, offeringID,
+	); err != nil {
+		return fmt.Errorf("FindOrInsertStudentCourse() insert: %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
