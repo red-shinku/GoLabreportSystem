@@ -16,6 +16,7 @@ import (
 	"LabSystem/internal/httperr"
 	"LabSystem/service"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -419,3 +420,64 @@ type Users struct{}
 
 // PasswordResets 忘记密码
 type PasswordResets struct{}
+
+// Courses 课程资源
+type Courses struct {
+	importer *service.CourseImportService
+}
+
+func NewCourses(importer *service.CourseImportService) *Courses {
+	return &Courses{importer: importer}
+}
+
+// ImportCourse 教师上传课程信息表（Excel）
+// multipart 表单字段：filename(file), courseName, className, term, closeTime(RFC3339)
+// className 缺省时由 service 兜底为 '-'
+func (c *Courses) ImportCourse(w http.ResponseWriter, r *http.Request) error {
+	teacherID, ok := r.Context().Value(middleware.CtxKeyUserID).(string)
+	if !ok || teacherID == "" {
+		return httperr.WithStatus(
+			fmt.Errorf("Courses.ImportCourse(): missing teacher id in context"),
+			http.StatusUnauthorized)
+	}
+
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		return httperr.WithStatus(err, http.StatusBadRequest)
+	}
+
+	file, _, err := r.FormFile("filename")
+	if err != nil {
+		return httperr.WithStatus(err, http.StatusBadRequest)
+	}
+	defer file.Close()
+
+	closeTime, err := time.Parse(time.RFC3339, r.FormValue("closeTime"))
+	if err != nil {
+		return httperr.WithStatus(
+			fmt.Errorf("Courses.ImportCourse(): closeTime: %v", err),
+			http.StatusBadRequest)
+	}
+
+	data := domain.NewImportCourseData(
+		teacherID,
+		strings.TrimSpace(r.FormValue("courseName")),
+		strings.TrimSpace(r.FormValue("className")),
+		strings.TrimSpace(r.FormValue("term")),
+		closeTime,
+	)
+	if data.CourseName == "" || data.Term == "" {
+		return httperr.WithStatus(
+			fmt.Errorf("Courses.ImportCourse(): courseName and term are required"),
+			http.StatusBadRequest)
+	}
+
+	if err := c.importer.Import(file, data); err != nil {
+		if errors.Is(err, domain.ErrSheetFormat) {
+			return httperr.WithStatus(err, http.StatusBadRequest)
+		}
+		return err
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	return nil
+}
