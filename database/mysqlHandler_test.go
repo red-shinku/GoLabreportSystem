@@ -153,6 +153,46 @@ func queryStuReportStatusSQL() string {
 		tabStudentCourse, tabCourseOffering, tabProject, tabStuReport)
 }
 
+func insertUserIgnoreSQL() string {
+	return fmt.Sprintf("insert ignore into %s (identity, number, passwd) values (?, ?, ?)", tabUsers)
+}
+
+func findProjectSQL() string {
+	return fmt.Sprintf("select projectID from %s where offeringID = ? and projectName = ?", tabProject)
+}
+
+func findCourseSQL() string {
+	return fmt.Sprintf("select courseID from %s where courseName = ?", tabCourse)
+}
+
+func insertCourseSQL() string {
+	return fmt.Sprintf("insert into %s (courseName) values (?)", tabCourse)
+}
+
+func findCourseOfferingSQL() string {
+	return fmt.Sprintf("select offeringID from %s where courseID = ? and className = ? and term = ?", tabCourseOffering)
+}
+
+func insertCourseOfferingSQL() string {
+	return fmt.Sprintf("insert into %s (courseID, className, term) values (?, ?, ?)", tabCourseOffering)
+}
+
+func findTeacherCourseSQL() string {
+	return fmt.Sprintf("select 1 from %s where teacherID = ? and offeringID = ?", tabTeacherCourse)
+}
+
+func insertTeacherCourseSQL() string {
+	return fmt.Sprintf("insert into %s (teacherID, offeringID) values (?, ?)", tabTeacherCourse)
+}
+
+func findStudentCourseSQL() string {
+	return fmt.Sprintf("select 1 from %s where studentID = ? and offeringID = ?", tabStudentCourse)
+}
+
+func insertStudentCourseSQL() string {
+	return fmt.Sprintf("insert into %s (studentID, offeringID) values (?, ?)", tabStudentCourse)
+}
+
 func TestUsersRepo_QueryPasswd(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		db, mock := newMockDB(t)
@@ -997,3 +1037,305 @@ func TestManCourseOfferRepo_InsertStuCourseOfferBatch(t *testing.T) {
 		mustExpectations(t, mock)
 	})
 }
+
+func TestUsersRepo_InsertNewUserBatchIgnore(t *testing.T) {
+	t.Run("invalid input", func(t *testing.T) {
+		repo := &UsersRepo{}
+		if err := repo.InsertNewUserBatchIgnore(nil); err == nil {
+			t.Fatal("expected error for nil input")
+		}
+	})
+
+	t.Run("empty slice short-circuits", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		repo := &UsersRepo{db: db}
+		users := []domain.UserInfo{}
+		if err := repo.InsertNewUserBatchIgnore(&users); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		users := []domain.UserInfo{
+			{Identity: 1, Number: "20260001", Passwd: "20260001"},
+			{Identity: 1, Number: "20260002", Passwd: "20260002"},
+		}
+
+		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserIgnoreSQL()))
+		prep.ExpectExec().
+			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		prep.ExpectExec().
+			WithArgs(users[1].Identity, users[1].Number, users[1].Passwd).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		repo := &UsersRepo{db: db}
+		if err := repo.InsertNewUserBatchIgnore(&users); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		mustExpectations(t, mock)
+	})
+
+	t.Run("exec error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		users := []domain.UserInfo{{Identity: 1, Number: "20260001", Passwd: "p"}}
+		prep := mock.ExpectPrepare(regexp.QuoteMeta(insertUserIgnoreSQL()))
+		prep.ExpectExec().
+			WithArgs(users[0].Identity, users[0].Number, users[0].Passwd).
+			WillReturnError(errors.New("dup"))
+
+		repo := &UsersRepo{db: db}
+		err := repo.InsertNewUserBatchIgnore(&users)
+		if err == nil || !errors.Is(err, domain.ErrModify) {
+			t.Fatalf("expected ErrModify, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
+func TestProjectRepo_FindOrInsertProject(t *testing.T) {
+	t.Run("hit existing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findProjectSQL())).
+			WithArgs(uint(11), "Lab1").
+			WillReturnRows(sqlmock.NewRows([]string{"projectID"}).AddRow(uint(7)))
+
+		repo := &ProjectRepo{db: db}
+		got, err := repo.FindOrInsertProject(11, "Lab1", fixedTime(), fixedTime().Add(24*time.Hour))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 7 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert when missing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		start := fixedTime()
+		deadline := start.Add(24 * time.Hour)
+		mock.ExpectQuery(regexp.QuoteMeta(findProjectSQL())).
+			WithArgs(uint(11), "Lab1").
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(addProjectSQL())).
+			WithArgs(uint(11), "Lab1", "", start, deadline).
+			WillReturnResult(sqlmock.NewResult(42, 1))
+
+		repo := &ProjectRepo{db: db}
+		got, err := repo.FindOrInsertProject(11, "Lab1", start, deadline)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 42 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findProjectSQL())).
+			WithArgs(uint(11), "Lab1").
+			WillReturnError(errors.New("db down"))
+
+		repo := &ProjectRepo{db: db}
+		_, err := repo.FindOrInsertProject(11, "Lab1", fixedTime(), fixedTime())
+		if err == nil || !errors.Is(err, domain.ErrQuery) {
+			t.Fatalf("expected ErrQuery, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
+func TestCourseRepo_FindOrInsertCourse(t *testing.T) {
+	t.Run("hit existing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findCourseSQL())).
+			WithArgs("Database").
+			WillReturnRows(sqlmock.NewRows([]string{"courseID"}).AddRow(uint(3)))
+
+		repo := &CourseRepo{db: db}
+		got, err := repo.FindOrInsertCourse("Database")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 3 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert when missing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findCourseSQL())).
+			WithArgs("Database").
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(insertCourseSQL())).
+			WithArgs("Database").
+			WillReturnResult(sqlmock.NewResult(9, 1))
+
+		repo := &CourseRepo{db: db}
+		got, err := repo.FindOrInsertCourse("Database")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 9 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findCourseSQL())).
+			WithArgs("Database").
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(insertCourseSQL())).
+			WithArgs("Database").
+			WillReturnError(errors.New("write failed"))
+
+		repo := &CourseRepo{db: db}
+		_, err := repo.FindOrInsertCourse("Database")
+		if err == nil || !errors.Is(err, domain.ErrModify) {
+			t.Fatalf("expected ErrModify, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
+func TestCourseRepo_FindOrInsertCourseOffering(t *testing.T) {
+	t.Run("hit existing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findCourseOfferingSQL())).
+			WithArgs(uint(3), "ClassA", "2025-2026-1").
+			WillReturnRows(sqlmock.NewRows([]string{"offeringID"}).AddRow(uint(11)))
+
+		repo := &CourseRepo{db: db}
+		got, err := repo.FindOrInsertCourseOffering(3, "ClassA", "2025-2026-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 11 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert when missing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findCourseOfferingSQL())).
+			WithArgs(uint(3), "-", "2025-2026-1").
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(insertCourseOfferingSQL())).
+			WithArgs(uint(3), "-", "2025-2026-1").
+			WillReturnResult(sqlmock.NewResult(21, 1))
+
+		repo := &CourseRepo{db: db}
+		got, err := repo.FindOrInsertCourseOffering(3, "-", "2025-2026-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 21 {
+			t.Fatalf("unexpected id: %d", got)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
+func TestCourseRepo_FindOrInsertTeacherCourse(t *testing.T) {
+	t.Run("already bound skips insert", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findTeacherCourseSQL())).
+			WithArgs("T001", uint(11)).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+
+		repo := &CourseRepo{db: db}
+		if err := repo.FindOrInsertTeacherCourse("T001", 11); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("insert when missing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findTeacherCourseSQL())).
+			WithArgs("T001", uint(11)).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(insertTeacherCourseSQL())).
+			WithArgs("T001", uint(11)).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		repo := &CourseRepo{db: db}
+		if err := repo.FindOrInsertTeacherCourse("T001", 11); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
+func TestCourseRepo_FindOrInsertStudentCourse(t *testing.T) {
+	t.Run("insert when missing", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findStudentCourseSQL())).
+			WithArgs("20260001", uint(11)).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(insertStudentCourseSQL())).
+			WithArgs("20260001", uint(11)).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		repo := &CourseRepo{db: db}
+		if err := repo.FindOrInsertStudentCourse("20260001", 11); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		db, mock := newMockDB(t)
+		defer db.Close()
+
+		mock.ExpectQuery(regexp.QuoteMeta(findStudentCourseSQL())).
+			WithArgs("20260001", uint(11)).
+			WillReturnError(errors.New("db down"))
+
+		repo := &CourseRepo{db: db}
+		err := repo.FindOrInsertStudentCourse("20260001", 11)
+		if err == nil || !errors.Is(err, domain.ErrQuery) {
+			t.Fatalf("expected ErrQuery, got %v", err)
+		}
+		mustExpectations(t, mock)
+	})
+}
+
