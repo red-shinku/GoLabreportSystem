@@ -18,6 +18,10 @@ var (
 	ErrNotExist = errors.New("not exist")
 )
 
+// ErrSheetFormat 表格解析错误：文件打不开、表头缺失、列数不足等
+var ErrSheetFormat = errors.New("invalid sheet format")
+
+// TODO: 当基文件夹不存在时创建？
 const baseDir string = "./files"
 
 var fileFmtSet map[string]struct{}
@@ -244,4 +248,54 @@ func (t *TargetPaths) Next() string {
 
 func (t *TargetPaths) HasNext() bool {
 	return t.cur < t.count
+}
+
+//=============================================
+// 课程信息表导入相关
+//=============================================
+
+// StudentRow 表格中一行学生记录
+type StudentRow struct {
+	Number string
+	Name   string
+}
+
+// NewStudentRow 创建StudentRow实例
+func NewStudentRow(number, name string) *StudentRow {
+	return &StudentRow{Number: number, Name: name}
+}
+
+// SheetData 表格解析器的标准输出
+// 与具体文件格式解耦，由业务层消费
+type SheetData struct {
+	Students     []StudentRow
+	ProjectNames []string
+}
+
+// NewSheetData 创建SheetData实例
+func NewSheetData(students []StudentRow, projectNames []string) *SheetData {
+	return &SheetData{
+		Students:     students,
+		ProjectNames: projectNames,
+	}
+}
+
+// ImportCourseData 教师导入课程信息时，从表单与上下文收集到的元数据
+type ImportCourseData struct {
+	TeacherID        string
+	CourseName       string
+	ClassName        string
+	Term             string
+	DefaultCloseTime time.Time
+}
+
+// NewImportCourseData 创建ImportCourseData实例
+func NewImportCourseData(teacherID, courseName, className, term string, defaultCloseTime time.Time) *ImportCourseData {
+	return &ImportCourseData{
+		TeacherID:        teacherID,
+		CourseName:       courseName,
+		ClassName:        className,
+		Term:             term,
+		DefaultCloseTime: defaultCloseTime,
+	}
 }

@@ -241,3 +241,23 @@ func NewStudentCourseInfo(studentID string, offeringID uint) *StudentCourseInfo 
 		OfferingID: offeringID,
 	}
 }
+
+// CourseInfo 课程表的单行数据
+type CourseInfo struct {
+	CourseID   uint
+	CourseName string
+}
+
+// CourseOfferingInfo 开课表的单行数据
+type CourseOfferingInfo struct {
+	OfferingID uint
+	CourseID   uint
+	ClassName  string
+	Term       string
+}
+
+// TeacherCourseInfo 教师授课的单行数据
+type TeacherCourseInfo struct {
+	TeacherID  string
+	OfferingID uint
+}
