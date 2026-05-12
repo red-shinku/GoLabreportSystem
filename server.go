@@ -234,9 +234,9 @@ func main() {
 	usersRepo := database.NewUsersRepo(db)
 	projectRepo := database.NewProjectRepo(db)
 	reportRepo := database.NewReportRepo(db)
-	manCourseOfferRepo := database.NewManCourseOfferRepo(db)
-	//FIXME: 补充课表导入功能
-	_ = manCourseOfferRepo
+	//manCourseOfferRepo := database.NewManCourseOfferRepo(db)
+	courseRepo := database.NewCourseRepo(db)
+	//_ = manCourseOfferRepo
 
 	fileService := service.NewFileService()
 	authService := service.NewAuthService(usersRepo)
@@ -244,6 +244,7 @@ func main() {
 	stuProjectService := service.NewStudentProjectService(projectRepo, projectRepo, fileService)
 	tecReportService := service.NewTeacherReportService(reportRepo, fileService)
 	stuReportService := service.NewStudentReportService(reportRepo, projectRepo, usersRepo, fileService)
+	courseImportService := service.NewCourseImportService(service.NewExcelSheetParser(), usersRepo, courseRepo, projectRepo)
 
 	lgPageGen := html.NewLoginPageGenerator()
 	stuHomeGen := html.NewStuHomeGenerator()
@@ -254,10 +255,11 @@ func main() {
 	offeringClassCtl := controller.NewOfferingClass(tecProjectService, tecHomeGen)
 	projectsCtl := controller.NewProjects(tecProjectService, stuProjectService, tecReportService, stuReportService, tecHomeGen, stuHomeGen)
 	submissionsCtl := controller.NewSubmissions(tecReportService)
+	coursesCtl := controller.NewCourses(courseImportService)
 
 	// 路由初始化
 	mux := http.NewServeMux()
-	router := server.NewRouter(mux, homeCtl, sessionsCtl, offeringClassCtl, projectsCtl, submissionsCtl)
+	router := server.NewRouter(mux, homeCtl, sessionsCtl, offeringClassCtl, projectsCtl, submissionsCtl, coursesCtl)
 	router.Init()
 
 	addr := cfg.Ipaddr + ":" + cfg.Port
