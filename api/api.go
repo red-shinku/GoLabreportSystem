@@ -29,8 +29,8 @@ type SwiftProjectStatusRequest struct {
 
 // CreateProjectRequest 新建项目 POST 方法的请求体
 type CreateProjectRequest struct {
-	ProjectName string    `json:"projectname"`
-	CloseTime   time.Time `json:"closeTime"`
+	ProjectName string `json:"projectname"`
+	CloseTime   string `json:"closeTime"`
 }
 
 // ProjectFileFormRequest 上传项目要求文件的表单数据
