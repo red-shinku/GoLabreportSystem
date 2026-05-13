@@ -29,6 +29,12 @@ func FilesBaseDir() string {
 
 var fileFmtSet map[string]struct{}
 
+// 初始化允许学生上传报告的格式
+func init() {
+	fileFmtSet = make(map[string]struct{})
+	fileFmtSet["pdf"] = struct{}{}
+}
+
 type LoginUserInfo struct {
 	Identity uint8
 	Number   string
