@@ -195,11 +195,21 @@ func (sp *StudentProjectService) organizeStuPjView(rowsInfo *[]domain.StudentPro
 
 // DownloadProjectFile 客户下载项目要求文件
 func (sp *StudentProjectService) DownloadProjectFile(w io.Writer, projectID uint) error {
-	path, err := sp.repoPubProject.QueryProjectFile(projectID)
+	path, err := sp.ProjectFilePath(projectID)
 	if err != nil {
 		return err
 	}
 
+	return sp.DownloadProjectFileByPath(w, path)
+}
+
+// ProjectFilePath 返回项目要求文件路径
+func (sp *StudentProjectService) ProjectFilePath(projectID uint) (string, error) {
+	return sp.repoPubProject.QueryProjectFile(projectID)
+}
+
+// DownloadProjectFileByPath 按给定路径输出项目要求文件
+func (sp *StudentProjectService) DownloadProjectFileByPath(w io.Writer, path string) error {
 	if err := sp.fs.LoadFile(w, path); err != nil {
 		return err
 	}
