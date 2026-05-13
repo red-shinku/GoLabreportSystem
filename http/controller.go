@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -89,6 +90,58 @@ func parseUintPath(r *http.Request, name string) (uint, error) {
 			http.StatusBadRequest)
 	}
 	return uint(id), nil
+}
+
+func parseDateTimeLocal(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	layouts := []string{
+		"2006-01-02T15:04",
+		"2006-01-02T15:04:05",
+		time.RFC3339,
+	}
+
+	for _, layout := range layouts {
+		var (
+			t   time.Time
+			err error
+		)
+		if layout == time.RFC3339 {
+			t, err = time.Parse(layout, raw)
+		} else {
+			t, err = time.ParseInLocation(layout, raw, time.Local)
+		}
+		if err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("invalid datetime-local value %q", raw)
+}
+
+func setFileResponseHeaders(w http.ResponseWriter, path string, preview bool) {
+	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if strings.HasPrefix(contentType, "text/") &&
+		!strings.Contains(strings.ToLower(contentType), "charset=") {
+		contentType += "; charset=utf-8"
+	}
+
+	dispositionType := "attachment"
+	if preview {
+		dispositionType = "inline"
+	}
+
+	disposition := dispositionType
+	if filename := filepath.Base(path); filename != "" {
+		if value := mime.FormatMediaType(dispositionType, map[string]string{"filename": filename}); value != "" {
+			disposition = value
+		}
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", disposition)
 }
 
 // Sessions 会话资源，即登录
@@ -224,7 +277,21 @@ func (o *OfferingClass) CreateProject(w http.ResponseWriter, r *http.Request) er
 		return httperr.WithStatus(err, http.StatusBadRequest)
 	}
 
-	form := domain.NewProjectData(offeringID, body.ProjectName, body.CloseTime)
+	closeTime, err := parseDateTimeLocal(body.CloseTime)
+	if err != nil {
+		return httperr.WithStatus(
+			fmt.Errorf("OfferingClass.CreateProject(): closeTime: %v", err),
+			http.StatusBadRequest)
+	}
+
+	projectName := strings.TrimSpace(body.ProjectName)
+	if projectName == "" {
+		return httperr.WithStatus(
+			fmt.Errorf("OfferingClass.CreateProject(): projectname is required"),
+			http.StatusBadRequest)
+	}
+
+	form := domain.NewProjectData(offeringID, projectName, closeTime)
 	item, err := o.tecProjects.CreateProject(form)
 	if err != nil {
 		return err
@@ -252,15 +319,13 @@ func (p *Projects) DownloadRequirement(w http.ResponseWriter, r *http.Request) e
 	}
 
 	preview := r.URL.Query().Get(route.QueryKeyPreview) == "true"
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if preview {
-		w.Header().Set("Content-Disposition", "inline")
-	} else {
-		w.Header().Set("Content-Disposition", "attachment")
+	path, err := p.stuProjects.ProjectFilePath(projectID)
+	if err != nil {
+		return err
 	}
 
-	return p.stuProjects.DownloadProjectFile(w, projectID)
+	setFileResponseHeaders(w, path, preview)
+	return p.stuProjects.DownloadProjectFileByPath(w, path)
 }
 
 // WatchStuSubmissions 查看学生完成情况，返回HTML片段给模态框
@@ -452,14 +517,7 @@ func (c *Courses) ImportCourse(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer file.Close()
 
-	closeTimeStr := r.FormValue("closeTime")
-	closeTime, err := time.ParseInLocation("2006-01-02T15:04", closeTimeStr, time.Local)
-	if err != nil {
-		closeTime, err = time.ParseInLocation("2006-01-02T15:04:05", closeTimeStr, time.Local)
-	}
-	if err != nil {
-		closeTime, err = time.Parse(time.RFC3339, closeTimeStr)
-	}
+	closeTime, err := parseDateTimeLocal(r.FormValue("closeTime"))
 	if err != nil {
 		return httperr.WithStatus(
 			fmt.Errorf("Courses.ImportCourse(): closeTime: %v", err),
