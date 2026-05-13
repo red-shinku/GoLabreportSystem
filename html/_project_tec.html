@@ -25,7 +25,7 @@
         {{if .IsActive}}
         <button class="btn btn-warning"
                 hx-patch="{{.SwiftClose.URL}}"
-                hx-headers='{"Content-Type": "application/json"}'
+                hx-ext="json-enc"
                 hx-vals='{"status": "closed"}'
                 hx-target="closest .project"
                 hx-swap="outerHTML"
@@ -35,7 +35,7 @@
         {{else}}
         <button class="btn btn-success"
                 hx-patch="{{.SwiftOpen.URL}}"
-                hx-headers='{"Content-Type": "application/json"}'
+                hx-ext="json-enc"
                 hx-vals='{"status": "open"}'
                 hx-target="closest .project"
                 hx-swap="outerHTML"
