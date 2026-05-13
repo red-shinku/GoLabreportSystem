@@ -21,6 +21,7 @@ import (
 	"LabSystem/http/middleware"
 	server "LabSystem/http/router"
 	html "LabSystem/http/template"
+	"LabSystem/internal/domain"
 	"LabSystem/service"
 )
 
@@ -205,6 +206,24 @@ func buildMySQLDSN(cfg *Config, dbName string) string {
 	}).FormatDSN()
 }
 
+func EnsureFilesDir() error {
+	filesDirPath := domain.FilesBaseDir()
+	info, err := os.Stat(filesDirPath)
+	if err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("%s exists but is not a directory", filesDirPath)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("stat %s: %w", filesDirPath, err)
+	}
+	if err := os.MkdirAll(filesDirPath, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filesDirPath, err)
+	}
+	return nil
+}
+
 // ConnectDB 生成DSN并建立数据库连接
 // TODO: 数据库连接池配置
 func ConnectDB(cfg *Config) {
@@ -237,6 +256,9 @@ var (
 
 func main() {
 	cfg := LoadConfig()
+	if err := EnsureFilesDir(); err != nil {
+		log.Fatalf("ensure files dir: %v", err)
+	}
 	//连接数据库
 	ConnectDB(&cfg)
 	defer db.Close()
