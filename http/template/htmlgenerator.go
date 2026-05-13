@@ -4,8 +4,10 @@ package html
 // 包括完整页面与 AJAX 返回的 HTML 片段
 
 import (
+	"fmt"
 	htmltpl "html/template"
 	"net/http"
+	"path/filepath"
 
 	"LabSystem/http/view"
 	"LabSystem/internal/domain"
@@ -23,7 +25,23 @@ func NewTecHomeGenerator() *TecHomeGenerator {
 	return &TecHomeGenerator{}
 }
 
-var templates = htmltpl.Must(htmltpl.ParseGlob("html/*.html"))
+var templates = mustParseTemplates()
+
+func mustParseTemplates() *htmltpl.Template {
+	patterns := []string{
+		"html/*.html",
+		"../html/*.html",
+		"../../html/*.html",
+	}
+
+	for _, pattern := range patterns {
+		if matches, _ := filepath.Glob(pattern); len(matches) > 0 {
+			return htmltpl.Must(htmltpl.ParseGlob(pattern))
+		}
+	}
+
+	panic(fmt.Sprintf("html/template: pattern matches no files: %v", patterns))
+}
 
 // LoginPageGenerator 返回登录页面。该页面无需额外构造，直接返回。
 type LoginPageGenerator struct{}

@@ -3,6 +3,7 @@ package view
 import (
 	"LabSystem/http/route"
 	"LabSystem/internal/domain"
+	"fmt"
 	"net/url"
 	"time"
 )
@@ -29,7 +30,8 @@ type CourseTecItemWithUrl struct {
 
 type ClassTecItemWithUrl struct {
 	// 班级名称
-	ClassName string
+	ClassName        string
+	ProjectsTargetID string
 	// 新建项目
 	CreateProject HXAction
 	Projects      []ProjectTecItemWithUrl
@@ -65,8 +67,9 @@ func BuildTecProjectViewWithUrl(serviceViews []domain.TeacherProjectView) *TecPr
 		courseItem := CourseTecItemWithUrl{CourseName: sv.CourseName}
 		for _, cls := range sv.Classes {
 			classItem := ClassTecItemWithUrl{
-				ClassName:     cls.ClassName,
-				CreateProject: HXAction{route.OfferingClassProjectsURL(cls.OfferingID), "POST"},
+				ClassName:        cls.ClassName,
+				ProjectsTargetID: fmt.Sprintf("projects-%d", cls.OfferingID),
+				CreateProject:    HXAction{route.OfferingClassProjectsURL(cls.OfferingID), "POST"},
 			}
 			for _, pj := range cls.Projects {
 				classItem.Projects = append(classItem.Projects, *BuildProjectTecItemWithUrl(&pj))
@@ -142,13 +145,14 @@ func BuildStuProjectViewWithUrl(serviceViews []domain.StudentProjectView) *StuPr
 // BuildProjectStuItemWithUrl 构建单个学生端项目视图（供 AJAX 片段使用）
 func BuildProjectStuItemWithUrl(pj *domain.ProjectStuItem) *ProjectStuItemWithUrl {
 	preview := url.Values{route.QueryKeyPreview: {"true"}}
+	download := url.Values{route.QueryKeyPreview: {"false"}}
 	item := &ProjectStuItemWithUrl{
 		ProjectName: pj.ProjectName,
 		StartTime:   pj.StartTime,
 		CloseTime:   pj.CloseTime,
 		IsSubmit:    pj.SubmitStatus,
 		IsActive:    pj.IsActive,
-		DownloadReq: HXAction{route.ProjectRequirementURL(pj.ProjectID), "GET"},
+		DownloadReq: HXAction{route.WithQuery(route.ProjectRequirementURL(pj.ProjectID), download), "GET"},
 		Submit:      HXAction{route.ProjectSubmissionsURL(pj.ProjectID), "POST"},
 	}
 	if pj.SubmitStatus {
