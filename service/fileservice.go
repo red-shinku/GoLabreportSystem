@@ -38,15 +38,15 @@ func (f *FileService) SaveFile(r io.Reader, fm fileMeta) error {
 		return errp
 	}
 	if _, err := os.Stat(filepath.Dir(filep)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filep), 0644); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filep), 0o755); err != nil {
 			return err
 		}
 	}
 	file, err := os.Create(filep)
-	defer file.Close()
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	if _, err := io.Copy(file, r); err != nil {
 		return err
 	}
@@ -55,11 +55,10 @@ func (f *FileService) SaveFile(r io.Reader, fm fileMeta) error {
 
 func (f *FileService) LoadFile(w io.Writer, path string) error {
 	file, err := os.Open(path)
-	defer file.Close()
-
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	if _, err := io.Copy(w, file); err != nil {
 		return err
 	}

@@ -21,8 +21,11 @@ var (
 // ErrSheetFormat 表格解析错误：文件打不开、表头缺失、列数不足等
 var ErrSheetFormat = errors.New("invalid sheet format")
 
-// TODO: 当基文件夹不存在时创建？
-const baseDir string = "./files"
+const FilesDirName = "files"
+
+func FilesBaseDir() string {
+	return filepath.Clean(filepath.Join(".", FilesDirName))
+}
 
 var fileFmtSet map[string]struct{}
 
@@ -162,12 +165,7 @@ func NewStuReportMeta(courseName, className, studentName, projectName, studentID
 // FilePath 返回安全的文件路径
 func (srm *StuReportMeta) FilePath() (string, error) {
 	filename := fmt.Sprintf("%s-%s-%s.%s", srm.StudentID, srm.StudentName, srm.ProjectName, srm.Format)
-	path := filepath.Join(baseDir, srm.CourseName, srm.ClassName, srm.ProjectName, filename)
-	cleanPath := filepath.Clean(path)
-	if !strings.HasPrefix(cleanPath, baseDir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("StuReportMeta(): path %w", ErrNotSafe)
-	}
-	return cleanPath, nil
+	return safeFilesPath(srm.CourseName, srm.ClassName, srm.ProjectName, filename)
 }
 
 // Check 检查文件格式
@@ -198,7 +196,7 @@ func NewProjectFileMeta(courseName, className, projectName, fileName string) *Pr
 
 // FilePath 返回安全的文件路径
 func (pfm *ProjectFileMeta) FilePath() (string, error) {
-	path := filepath.Join(baseDir, pfm.CourseName, pfm.ClassName, pfm.ProjectName, pfm.FileName)
+	path := filepath.Join(FilesBaseDir(), pfm.CourseName, pfm.ClassName, pfm.ProjectName, pfm.FileName)
 	cleanpath, err := pfm.cleanPath(path)
 	if err != nil {
 		return "", err
@@ -207,7 +205,7 @@ func (pfm *ProjectFileMeta) FilePath() (string, error) {
 }
 
 func (pfm *ProjectFileMeta) DirectoryPath() (string, error) {
-	path := filepath.Join(baseDir, pfm.CourseName, pfm.ClassName, pfm.ProjectName)
+	path := filepath.Join(FilesBaseDir(), pfm.CourseName, pfm.ClassName, pfm.ProjectName)
 	cleanpath, err := pfm.cleanPath(path)
 	if err != nil {
 		return "", err
@@ -216,11 +214,38 @@ func (pfm *ProjectFileMeta) DirectoryPath() (string, error) {
 }
 
 func (pfm *ProjectFileMeta) cleanPath(path string) (string, error) {
+	return cleanPathUnderFilesDir(path)
+}
+
+func safeFilesPath(parts ...string) (string, error) {
+	items := append([]string{FilesBaseDir()}, parts...)
+	return cleanPathUnderFilesDir(filepath.Join(items...))
+}
+
+func cleanPathUnderFilesDir(path string) (string, error) {
 	cleanPath := filepath.Clean(path)
-	if !strings.HasPrefix(cleanPath, baseDir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("StuReportMeta(): path %w", ErrNotSafe)
+	baseDir := FilesBaseDir()
+
+	absBaseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("cleanPathUnderFilesDir(): resolve base dir: %w", err)
 	}
-	return cleanPath, nil
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("cleanPathUnderFilesDir(): resolve path: %w", err)
+	}
+
+	rel, err := filepath.Rel(absBaseDir, absPath)
+	if err != nil {
+		return "", fmt.Errorf("cleanPathUnderFilesDir(): compare path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("cleanPathUnderFilesDir(): %w: %s", ErrNotSafe, cleanPath)
+	}
+	if rel == "." {
+		return baseDir, nil
+	}
+	return filepath.Join(baseDir, rel), nil
 }
 
 type TargetPaths struct {
