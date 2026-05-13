@@ -111,7 +111,6 @@ func (u *UsersRepo) InsertNewUserBatch(users *[]domain.UserInfo) error {
 
 // InsertNewUserBatchIgnore 批量插入新用户；已存在的学号/工号自动跳过
 // 若已有记录缺少姓名，则使用导入表中的姓名回填；其它写库异常直接返回
-// FIXME: 使用事务
 func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 	if u.db == nil || users == nil {
 		return fmt.Errorf("InsertNewUserBatchIgnore: invalid input parameters")
@@ -120,13 +119,24 @@ func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 		return nil
 	}
 
-	insertStmt, err := u.db.Prepare(fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers))
+	tx, err := u.db.Begin()
+	if err != nil {
+		return fmt.Errorf("InsertNewUserBatchIgnore() begin failed: %w, %v", domain.ErrModify, err)
+	}
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = tx.Rollback()
+		}
+	}()
+
+	insertStmt, err := tx.Prepare(fmt.Sprintf("insert into %s (identity, number, name, passwd) values (?, ?, ?, ?)", tabUsers))
 	if err != nil {
 		return fmt.Errorf("InsertNewUserBatchIgnore() prepare failed: %w, %v", domain.ErrModify, err)
 	}
 	defer insertStmt.Close()
 
-	updateStmt, err := u.db.Prepare(fmt.Sprintf(
+	updateStmt, err := tx.Prepare(fmt.Sprintf(
 		"update %s set name = ? where number = ? and (name is null or name = '')",
 		tabUsers,
 	))
@@ -137,7 +147,7 @@ func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 
 	for _, user := range *users {
 		var dummy int
-		err := u.db.QueryRow(
+		err := tx.QueryRow(
 			fmt.Sprintf("select 1 from %s where number = ?", tabUsers),
 			user.Number,
 		).Scan(&dummy)
@@ -156,6 +166,10 @@ func (u *UsersRepo) InsertNewUserBatchIgnore(users *[]domain.UserInfo) error {
 		default:
 			return fmt.Errorf("InsertNewUserBatchIgnore() query failed: %w, %v", domain.ErrQuery, err)
 		}
+	}
+	rollbackNeeded = false
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("InsertNewUserBatchIgnore() commit failed: %w, %v", domain.ErrModify, err)
 	}
 	return nil
 }
