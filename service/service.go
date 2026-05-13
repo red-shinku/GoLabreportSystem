@@ -48,9 +48,9 @@ func NewStudentReportService(stuRpOp studentReportOp, pjInfoOp projectInfoOp, st
 	}
 }
 
-func NewCourseService(courseOp courseOp) *CourseService {
-	return &CourseService{repoCourse: courseOp}
-}
+//func NewCourseService(courseOp courseOp) *CourseService {
+//	return &CourseService{repoCourse: courseOp}
+//}
 
 //=========================================================
 //	关于认证相关的业务，目前有：
@@ -431,23 +431,25 @@ func (sr *StudentReportService) genStuReportData(form *domain.StuReportData) (*d
 }
 
 //=========================================================
-//	关于课程相关的业务，目前有：
+//	旧版本关于课程相关的业务
 //	批量添加学生选课
+//
+//  新的课程相关业务在 service/courseimport.go中
 //=========================================================
 
-// CourseService 课程相关业务，如批量导入选课信息
-type CourseService struct {
-	repoCourse courseOp
-}
-
-type courseOp interface {
-	InsertStuCourseOfferBatch(courses *[]domain.StudentCourseInfo) error
-}
-
-// RegisterStuCourseOfferBatch 批量注册学生选课信息
-func (c *CourseService) RegisterStuCourseOfferBatch(stuCourseOffer *[]domain.StudentCourseInfo) error {
-	if err := c.repoCourse.InsertStuCourseOfferBatch(stuCourseOffer); err != nil {
-		return err
-	}
-	return nil
-}
+//// CourseService 课程相关业务，如批量导入选课信息
+//type CourseService struct {
+//	repoCourse courseOp
+//}
+//
+//type courseOp interface {
+//	InsertStuCourseOfferBatch(courses *[]domain.StudentCourseInfo) error
+//}
+//
+//// RegisterStuCourseOfferBatch 未使用的旧方法，批量注册学生选课信息
+//func (c *CourseService) RegisterStuCourseOfferBatch(stuCourseOffer *[]domain.StudentCourseInfo) error {
+//	if err := c.repoCourse.InsertStuCourseOfferBatch(stuCourseOffer); err != nil {
+//		return err
+//	}
+//	return nil
+//}

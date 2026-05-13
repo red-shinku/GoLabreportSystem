@@ -33,9 +33,9 @@ func NewReportRepo(db *sql.DB) *ReportRepo {
 	return &ReportRepo{db: db}
 }
 
-func NewManCourseOfferRepo(db *sql.DB) *ManCourseOfferRepo {
-	return &ManCourseOfferRepo{db: db}
-}
+//func NewManCourseOfferRepo(db *sql.DB) *ManCourseOfferRepo {
+//	return &ManCourseOfferRepo{db: db}
+//}
 
 func NewCourseRepo(db *sql.DB) *CourseRepo {
 	return &CourseRepo{db: db}
@@ -506,29 +506,29 @@ func (r *ReportRepo) QueryStuReportFileAll(projectID uint) ([]string, error) {
 	return result, nil
 }
 
-// ManCourseOfferRepo 学生/教师选课表相关操作
-type ManCourseOfferRepo struct {
-	db *sql.DB
-}
-
-// InsertStuCourseOfferBatch 批量添加学生选课，插入学生选课表
-// FIXME: 使用事务
-func (mco *ManCourseOfferRepo) InsertStuCourseOfferBatch(courses *[]domain.StudentCourseInfo) error {
-	if mco.db == nil || courses == nil {
-		return fmt.Errorf("InsertStuCourseOfferBatch: invalid input parameters")
-	}
-	for _, course := range *courses {
-		_, err := mco.db.Exec(
-			fmt.Sprintf("insert into %s (studentID, offeringID) values (?, ?)", tabStudentCourse),
-			course.StudentID,
-			course.OfferingID,
-		)
-		if err != nil {
-			return fmt.Errorf("InsertStuCourseOfferBatch(): %w, %v", domain.ErrModify, err)
-		}
-	}
-	return nil
-}
+//// ManCourseOfferRepo 学生/教师选课表相关操作
+//type ManCourseOfferRepo struct {
+//	db *sql.DB
+//}
+//
+//// InsertStuCourseOfferBatch 批量添加学生选课，插入学生选课表
+//// FIXME: 使用事务
+//func (mco *ManCourseOfferRepo) InsertStuCourseOfferBatch(courses *[]domain.StudentCourseInfo) error {
+//	if mco.db == nil || courses == nil {
+//		return fmt.Errorf("InsertStuCourseOfferBatch: invalid input parameters")
+//	}
+//	for _, course := range *courses {
+//		_, err := mco.db.Exec(
+//			fmt.Sprintf("insert into %s (studentID, offeringID) values (?, ?)", tabStudentCourse),
+//			course.StudentID,
+//			course.OfferingID,
+//		)
+//		if err != nil {
+//			return fmt.Errorf("InsertStuCourseOfferBatch(): %w, %v", domain.ErrModify, err)
+//		}
+//	}
+//	return nil
+//}
 
 // CourseRepo 课程、开课、教师授课、学生选课的UPSERT操作集合
 // 服务于教师"课程信息表"导入业务
