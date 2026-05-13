@@ -217,6 +217,89 @@
             window.location.href = '/sessions';
         }
 
+        function authHeaders() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                return {};
+            }
+            return { 'Authorization': 'Bearer ' + token };
+        }
+
+        function fallbackFilename(url) {
+            const pathname = new URL(url, window.location.origin).pathname;
+            const name = pathname.split('/').pop();
+            return name || 'download';
+        }
+
+        function extractFilename(contentDisposition, fallbackName) {
+            if (!contentDisposition) {
+                return fallbackName;
+            }
+
+            const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf8Match) {
+                return decodeURIComponent(utf8Match[1]);
+            }
+
+            const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+            if (asciiMatch) {
+                return asciiMatch[1];
+            }
+
+            return fallbackName;
+        }
+
+        async function fetchFile(url) {
+            const response = await fetch(url, {
+                headers: authHeaders()
+            });
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || ('HTTP ' + response.status));
+            }
+            return response;
+        }
+
+        async function downloadFile(url) {
+            try {
+                const response = await fetchFile(url);
+                const blob = await response.blob();
+                const blobURL = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobURL;
+                link.download = extractFilename(
+                    response.headers.get('Content-Disposition'),
+                    fallbackFilename(url)
+                );
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(blobURL), 1000);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function previewFile(url) {
+            const previewWindow = window.open('', '_blank');
+            if (!previewWindow) {
+                alert('无法打开预览窗口');
+                return;
+            }
+
+            try {
+                previewWindow.document.write('<p>Loading...</p>');
+                const response = await fetchFile(url);
+                const blob = await response.blob();
+                const blobURL = URL.createObjectURL(blob);
+                previewWindow.location.replace(blobURL);
+                setTimeout(() => URL.revokeObjectURL(blobURL), 60000);
+            } catch (error) {
+                previewWindow.close();
+                alert(error.message);
+            }
+        }
+
         document.body.addEventListener('htmx:configRequest', function(evt) {
             const token = localStorage.getItem('token');
             if (token) {

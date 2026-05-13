@@ -17,9 +17,9 @@
                 onclick="toggleUploadForm(this)">
             上传要求文件
         </button>
-        <button class="btn btn-secondary"
-                hx-get="{{.Check.URL}}"
-                hx-target="body">
+        <button type="button"
+                class="btn btn-secondary"
+                onclick="previewFile('{{.Check.URL}}')">
             预览要求文件
         </button>
         {{if .IsActive}}
@@ -49,9 +49,9 @@
                 onclick="showModal()">
             查看完成情况
         </button>
-        <button class="btn btn-success"
-                hx-get="{{.DownloadStuRp.URL}}"
-                hx-target="body">
+        <button type="button"
+                class="btn btn-success"
+                onclick="downloadFile('{{.DownloadStuRp.URL}}')">
             打包下载报告
         </button>
         <button class="btn btn-danger"

@@ -15,9 +15,9 @@
         截止时间：{{.CloseTime.Format "2006-01-02 15:04"}}
     </div>
     <div class="project-actions">
-        <button class="btn btn-secondary"
-                hx-get="{{.DownloadReq.URL}}"
-                hx-target="body">
+        <button type="button"
+                class="btn btn-secondary"
+                onclick="downloadFile('{{.DownloadReq.URL}}')">
             下载项目要求
         </button>
         {{if .IsActive}}
@@ -27,9 +27,9 @@
         </button>
         {{end}}
         {{if .IsSubmit}}
-        <button class="btn btn-success"
-                hx-get="{{.Check.URL}}"
-                hx-target="body">
+        <button type="button"
+                class="btn btn-success"
+                onclick="previewFile('{{.Check.URL}}')">
             预览我的报告
         </button>
         {{end}}
