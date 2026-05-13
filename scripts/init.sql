@@ -25,7 +25,9 @@ create table Course(
 --     课程标识
     courseID int unsigned AUTO_INCREMENT PRIMARY KEY,
 --     课程名
-    courseName varchar(24)
+    courseName varchar(24),
+
+    key idx_course_course_name (courseName)
 );
 
 -- 选课表，课程与班级
@@ -37,6 +39,7 @@ CREATE TABLE CourseOffering (
 --     学期
     term varchar(32) not null,
 
+    key idx_course_offering_course_class_term (courseID, className, term),
     FOREIGN KEY (courseID) REFERENCES Course(courseID) ON DELETE CASCADE
 );
 
@@ -47,6 +50,8 @@ create table StudentCourse(
 --     参加的课程
     offeringID int unsigned not null,
 
+    key idx_student_course_student_offering (studentID, offeringID),
+    key idx_student_course_offering_student (offeringID, studentID),
     FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE,
     FOREIGN KEY (studentID) REFERENCES Users(number) ON DELETE CASCADE
 );
@@ -58,6 +63,8 @@ create table TeacherCourse(
 --     管理的课程
     offeringID int unsigned not null,
 
+    key idx_teacher_course_teacher_offering (teacherID, offeringID),
+    key idx_teacher_course_offering (offeringID),
     FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE,
     FOREIGN KEY (teacherID) REFERENCES Users(number) ON DELETE CASCADE
 );
@@ -79,6 +86,7 @@ create table Project(
 --  项目开启状态
     isActive bool not null default true,
 
+    key idx_project_offering_project_name (offeringID, projectName),
     FOREIGN KEY (offeringID) REFERENCES CourseOffering(offeringID) ON DELETE CASCADE
 );
 
@@ -94,6 +102,8 @@ create table StuReport(
     reportFilePath varchar(128),
 --     提交时间
     submitTime datetime,
+    key idx_stu_report_project_student (projectID, studentID),
+    key idx_stu_report_student (studentID),
 --     FOREIGN KEY (studentID) REFERENCES StudentCourse(studentID) ON DELETE CASCADE,
     FOREIGN KEY (studentID) REFERENCES Users(number) ON DELETE CASCADE,
     FOREIGN KEY (projectID) REFERENCES Project(projectID) ON DELETE CASCADE
