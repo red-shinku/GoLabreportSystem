@@ -4,8 +4,6 @@ package domain
 
 import "time"
 
-//FIXME: 移至独立的api层（请求与响应的json结构）
-
 // ProjectData 当新建项目时，从表单或请求中获取的相关数据
 // 填充完毕后会转交给业务层，用于下一步的DTO构建
 type ProjectData struct {
