@@ -490,24 +490,17 @@
             }
         }
 
-        async function previewFile(url) {
-            const previewWindow = window.open('', '_blank');
+        function previewFile(url) {
+            const previewWindow = window.open(
+                new URL(url, window.location.origin).toString(),
+                '_blank',
+                'noopener'
+            );
             if (!previewWindow) {
                 alert('无法打开预览窗口');
-                return;
+                return false;
             }
-
-            try {
-                previewWindow.document.write('<p>Loading...</p>');
-                const response = await fetchFile(url);
-                const blob = await response.blob();
-                const blobURL = URL.createObjectURL(blob);
-                previewWindow.location.replace(blobURL);
-                setTimeout(() => URL.revokeObjectURL(blobURL), 60000);
-            } catch (error) {
-                previewWindow.close();
-                alert(error.message);
-            }
+            return true;
         }
 
         // 为所有 htmx 请求添加 token

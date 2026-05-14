@@ -21,7 +21,8 @@
             下载项目要求
         </button>
         {{if .IsActive}}
-        <button class="btn btn-primary"
+        <button type="button"
+                class="btn btn-primary"
                 onclick="toggleUploadForm(this)">
             {{if .IsSubmit}}重新提交报告{{else}}提交报告{{end}}
         </button>
