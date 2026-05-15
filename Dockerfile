@@ -24,6 +24,4 @@ COPY --from=builder /app/scripts /app/scripts
 # 容器内部可用 8080 8443 端口
 
 EXPOSE 8080 8443
-ENTR
-
-YPOINT ["/app/server"]
+ENTRYPOINT ["/app/server"]
