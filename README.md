@@ -12,16 +12,25 @@
 
 **环境变量**：
 ```
-IP_ADDR:        服务IP地址
-PORT:           服务端口
-ENABLE_TLS:     是否开启https
+IP_ADDR:                    服务IP地址
+PORT:                       服务端口
+ENABLE_TLS:                 是否开启https
 
-JWT_SECRET:     服务端的JWT密钥
+JWT_SECRET:                 服务端的JWT密钥
 
-DATABASE_ADDR:  数据库服务的IP地址 
-DATABASE_PORT:  数据库服务的端口
-DATABASE_USER:  数据库用户
-DATABASE_PASSWD:数据库用户密码
+DATABASE_ADDR:              数据库服务的IP地址 
+DATABASE_PORT:              数据库服务的端口
+DATABASE_USER:              数据库用户
+DATABASE_PASSWD:            数据库用户密码
+
+//数据库连接池配置
+DB_MAX_OPEN_CONNS:          最大连接数
+DB_MAX_IDLE_CONNS:          最大空闲连接数
+DB_CONN_MAX_LIFETIME_SEC:   一个连接的最长存活时间
+DB_CONN_MAX_IDLE_TIME_SEC:  空闲连接最长存活时间
+
+ENABLE_PPROF:               开启pprof性能监控
+PPROF_ADDR:                 pprof性能工具运行的地址及端口
 ```
 
 **config.json**
@@ -29,18 +38,29 @@ DATABASE_PASSWD:数据库用户密码
 与环境变量选项相比，JWT密钥与数据库密码设置改为填写对应的文件路径：`jwt_secret_file`、`database_passwd_file`。
 
 ```
-{
-  "ip_addr": "0.0.0.0",
-  "port": "8080",
-  "enable_tls": false,
-  "jwt_secret_file": "./jwt.key",
+{    
+  "ip_addr": "0.0.0.0",                 //服务IP地址
+  "port": "8080",                       //服务端口
+  "enable_tls": false,                  //是否开始TLS
+  "jwt_secret_file": "./jwt.key",       //服务端JWT密钥文件路径
 
-  "database_addr": "127.0.0.1",
-  "database_port": "3306",
-  "database_user":"root",
-  "database_passwd_file":"./db.pass"
+  "database_addr": "127.0.0.1",         //数据库IP地址
+  "database_port": "3306",              //数据库端口
+  "database_user":"root",               //数据库用户名
+  "database_passwd_file":"./db.pass",   //数据库密码文件路径
+
+                                        //数据库连接池相关
+  "db_max_open_conns": 512,             //最大连接数
+  "db_max_idle_conns": 256,             //最大空闲连接数
+  "db_conn_max_lifetime_sec":1800,      //一个连接的最长存活时间
+  "db_conn_max_idle_time_sec": 300,     //空闲连接最长存活时间
+
+  "enable_pprof": false,                //开启pprof性能监控
+  "pprof_addr": "127.0.0.1:6060"        //pprof性能工具运行的地址及端口
 }
 ```
+
+请特别注意 pprof 监控选项的配置，仅在需要时开启，且不要将其暴露到公网。
 
 **默认值**
 
@@ -52,10 +72,10 @@ DATABASE_PASSWD:数据库用户密码
 
 构建实验报告系统镜像，在项目根目录：
 ```
-docker build . -t labsys:v0.2
+docker build . -t red-shinku/labsys:v0.3
 ```
 
-启动实验报告系统的容器（示例）：
+启动实验报告系统的容器（powershell示例）：
 ```powershell
 docker run -d `
   --name golabsys `
@@ -67,7 +87,7 @@ docker run -d `
   -v "$(pwd)/jwt.key:/app/jwt.key:ro" `
   -v "$(pwd)/db.pass:/app/db.pass:ro" `
   -v "$(pwd)/config.json:/app/config.json" `
-  labsys:v0.2
+  red-shinku/labsys:v0.3
 ```
 
 或使用 docker compose：  
@@ -100,3 +120,10 @@ go build -o labsys
 1. 启动前需确保数据库服务正常运行。  
 2. 关于学生账户的注册方式：教师在导入课程信息表时，服务端会自动提取其中的学生信息，做幂等注册，密码默认与学号相同；在这之后，才完成课程信息的导入。目前对于以这种方式批量导入的课程下的项目，无法做到设定不同的截止时间。
 3. 学生预览自己上传的报告的功能还未实现。（下载报告的操作目前只支持打包批量下载）
+
+## 需要完善的地方
+
+1. 文件系统与数据库系统的一致性保证。
+2. 密码的加密存储。
+3. 管理员界面的设计。
+4. TLS证书管理？
