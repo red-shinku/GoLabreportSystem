@@ -954,40 +954,41 @@ func TestStudentReportService_UploadStuReport(t *testing.T) {
 	}
 }
 
-func TestCourseService_RegisterStuCourseOfferBatch(t *testing.T) {
-	courses := []domain.StudentCourseInfo{{StudentID: "20260001", OfferingID: 11}}
-
-	t.Run("passes courses to repo", func(t *testing.T) {
-		var gotCourses *[]domain.StudentCourseInfo
-		svc := &CourseService{
-			repoCourse: stubCourseRepo{
-				insertStuCourseOfferBatchFn: func(input *[]domain.StudentCourseInfo) error {
-					gotCourses = input
-					return nil
-				},
-			},
-		}
-
-		if err := svc.RegisterStuCourseOfferBatch(&courses); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if gotCourses != &courses {
-			t.Fatal("service should pass the original slice pointer to repo")
-		}
-	})
-
-	t.Run("returns repo error", func(t *testing.T) {
-		wantErr := errors.New("insert failed")
-		svc := &CourseService{
-			repoCourse: stubCourseRepo{
-				insertStuCourseOfferBatchFn: func(*[]domain.StudentCourseInfo) error {
-					return wantErr
-				},
-			},
-		}
-
-		if err := svc.RegisterStuCourseOfferBatch(&courses); !errors.Is(err, wantErr) {
-			t.Fatalf("expected %v, got %v", wantErr, err)
-		}
-	})
-}
+// 以过时的方法
+//func TestCourseService_RegisterStuCourseOfferBatch(t *testing.T) {
+//	courses := []domain.StudentCourseInfo{{StudentID: "20260001", OfferingID: 11}}
+//
+//	t.Run("passes courses to repo", func(t *testing.T) {
+//		var gotCourses *[]domain.StudentCourseInfo
+//		svc := &CourseService{
+//			repoCourse: stubCourseRepo{
+//				insertStuCourseOfferBatchFn: func(input *[]domain.StudentCourseInfo) error {
+//					gotCourses = input
+//					return nil
+//				},
+//			},
+//		}
+//
+//		if err := svc.RegisterStuCourseOfferBatch(&courses); err != nil {
+//			t.Fatalf("unexpected error: %v", err)
+//		}
+//		if gotCourses != &courses {
+//			t.Fatal("service should pass the original slice pointer to repo")
+//		}
+//	})
+//
+//	t.Run("returns repo error", func(t *testing.T) {
+//		wantErr := errors.New("insert failed")
+//		svc := &CourseService{
+//			repoCourse: stubCourseRepo{
+//				insertStuCourseOfferBatchFn: func(*[]domain.StudentCourseInfo) error {
+//					return wantErr
+//				},
+//			},
+//		}
+//
+//		if err := svc.RegisterStuCourseOfferBatch(&courses); !errors.Is(err, wantErr) {
+//			t.Fatalf("expected %v, got %v", wantErr, err)
+//		}
+//	})
+//}
