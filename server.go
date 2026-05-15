@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -31,10 +32,15 @@ const (
 	initScriptPath = "scripts/init.sql"
 )
 
+// Config 所有配置选项
 type Config struct {
 	Ipaddr    string `json:"ip_addr" env:"IP_ADDR"`
 	Port      string `json:"port" env:"PORT"`
 	EnableTLS bool   `json:"enable_tls" env:"ENABLE_TLS"`
+
+	// pprof 性能分析
+	EnablePprof bool   `json:"enable_pprof" env:"ENABLE_PPROF"`
+	PprofAddr   string `json:"pprof_addr" env:"PPROF_ADDR"`
 
 	// JWT secret
 	JWTSecret     string `env:"JWT_SECRET"`
@@ -46,8 +52,15 @@ type Config struct {
 	DatabaseUser       string `json:"database_user" env:"DATABASE_USER"`
 	DatabasePasswd     string `env:"DATABASE_PASSWD"`
 	DatabasePasswdFile string `json:"database_passwd_file" env:"DATABASE_PASSWD_FILE"`
+
+	// Database connection pool（durations 以秒为单位；<=0 表示使用默认值）
+	DBMaxOpenConns       int `json:"db_max_open_conns" env:"DB_MAX_OPEN_CONNS"`
+	DBMaxIdleConns       int `json:"db_max_idle_conns" env:"DB_MAX_IDLE_CONNS"`
+	DBConnMaxLifetimeSec int `json:"db_conn_max_lifetime_sec" env:"DB_CONN_MAX_LIFETIME_SEC"`
+	DBConnMaxIdleTimeSec int `json:"db_conn_max_idle_time_sec" env:"DB_CONN_MAX_IDLE_TIME_SEC"`
 }
 
+// LoadJSONConfig 读取config.json
 func LoadJSONConfig(path string) Config {
 	var cfg Config
 
@@ -63,6 +76,7 @@ func LoadJSONConfig(path string) Config {
 	return cfg
 }
 
+// LoadEnvConfig 读取环境变量
 func LoadEnvConfig(cfg *Config) {
 	if err := env.Parse(cfg); err != nil {
 		panic(err)
@@ -101,6 +115,7 @@ func (c *Config) LoadDBPasswd() error {
 	return errors.New("missing database passwd")
 }
 
+// applyDefaults 保底设置部分配置的默认值
 func applyDefaults(c *Config) {
 	if c.Ipaddr == "" {
 		c.Ipaddr = "0.0.0.0"
@@ -108,8 +123,24 @@ func applyDefaults(c *Config) {
 	if c.Port == "" {
 		c.Port = "8080"
 	}
+	if c.DBMaxOpenConns <= 0 {
+		c.DBMaxOpenConns = 50
+	}
+	if c.DBMaxIdleConns <= 0 {
+		c.DBMaxIdleConns = 10
+	}
+	if c.DBConnMaxLifetimeSec <= 0 {
+		c.DBConnMaxLifetimeSec = 1800
+	}
+	if c.DBConnMaxIdleTimeSec <= 0 {
+		c.DBConnMaxIdleTimeSec = 300
+	}
+	if c.PprofAddr == "" {
+		c.PprofAddr = "127.0.0.1:6060"
+	}
 }
 
+// LoadConfig 从环境变量、配置文件加载配置，并读取可能存在的密钥文件
 func LoadConfig() Config {
 	// 读取JSON配置
 	cfg := LoadJSONConfig("config.json")
@@ -206,6 +237,7 @@ func buildMySQLDSN(cfg *Config, dbName string) string {
 	}).FormatDSN()
 }
 
+// EnsureFilesDir 确保存放项目或报告文件的基文件夹存在
 func EnsureFilesDir() error {
 	filesDirPath := domain.FilesBaseDir()
 	info, err := os.Stat(filesDirPath)
@@ -224,8 +256,15 @@ func EnsureFilesDir() error {
 	return nil
 }
 
+// configureDBPool 应用连接池参数（最大连接数、空闲连接数、连接存活/空闲时长）。
+func configureDBPool(db *sql.DB, cfg *Config) {
+	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
+	db.SetConnMaxLifetime(time.Duration(cfg.DBConnMaxLifetimeSec) * time.Second)
+	db.SetConnMaxIdleTime(time.Duration(cfg.DBConnMaxIdleTimeSec) * time.Second)
+}
+
 // ConnectDB 生成DSN并建立数据库连接
-// TODO: 数据库连接池配置
 func ConnectDB(cfg *Config) {
 	dsn := buildMySQLDSN(cfg, "")
 	tempdb, errt := sql.Open("mysql", dsn)
@@ -248,14 +287,40 @@ func ConnectDB(cfg *Config) {
 	if err != nil {
 		log.Fatalf("open database: %v", err)
 	}
+	configureDBPool(db, cfg)
 }
 
 var (
 	db *sql.DB
 )
 
+// startPprofServer 在独立协程上启动 pprof HTTP 端点，仅注册 net/http/pprof 的路由，
+// 避免污染业务 mux。监听地址默认 127.0.0.1:6060，可通过 cfg.PprofAddr 覆盖。
+func startPprofServer(addr string) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	log.Printf("pprof listening on %s", addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("pprof server: %v", err)
+	}
+}
+
 func main() {
 	cfg := LoadConfig()
+
+	if cfg.EnablePprof {
+		go startPprofServer(cfg.PprofAddr)
+	}
+
 	if err := EnsureFilesDir(); err != nil {
 		log.Fatalf("ensure files dir: %v", err)
 	}
