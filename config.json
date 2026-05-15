@@ -7,5 +7,13 @@
   "database_addr": "127.0.0.1",
   "database_port": "3306",
   "database_user":"root",
-  "database_passwd_file":"./db.pass"
+  "database_passwd_file":"./db.pass",
+
+  "db_max_open_conns": 512,
+  "db_max_idle_conns": 256,
+  "db_conn_max_lifetime_sec":1800,
+  "db_conn_max_idle_time_sec": 300,
+
+  "enable_pprof": false,
+  "pprof_addr": "127.0.0.1:6060"
 }
