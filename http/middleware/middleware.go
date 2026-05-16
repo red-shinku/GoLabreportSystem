@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -21,6 +22,13 @@ import (
 // 中间件围绕自定义的 HandlerFunc 而非 http.HandlerFunc 设计，
 // 以便后置日志中间件可直接获取下游返回的具体错误信息。
 // 中间件链最终通过 Adapt 统一适配为 http.HandlerFunc 挂到 router 上。
+
+var logger *zap.SugaredLogger
+
+func init() {
+	theZagLogger, _ := zap.NewProduction()
+	logger = theZagLogger.Sugar()
+}
 
 // HandlerFunc 自定义Handler类型，返回error由上层中间件/适配器统一处理
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
@@ -116,19 +124,20 @@ func LoginCheck(next HandlerFunc) HandlerFunc {
 func Logger(next HandlerFunc) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		start := time.Now()
-		//FIXME: 使用文件记录
-		log.Printf("[REQ] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+		//log.Printf("[REQ] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
 		err := next(w, r)
 
 		defer func() {
 			elapsed := time.Since(start)
 			if err != nil {
-				log.Printf("[ERR] %s %s -> %d %v (%s)",
+				logger.Errorf("%s %s -> %d %v (%s)",
 					r.Method, r.URL.Path, httperr.HTTPStatus(err), err, elapsed)
 			} else {
-				log.Printf("[RES] %s %s -> ok (%s)", r.Method, r.URL.Path, elapsed)
+				//logger.Infof("%s %s -> ok (%s)", r.Method, r.URL.Path, elapsed)
 			}
+			logger.Sync()
 		}()
 
 		return err
