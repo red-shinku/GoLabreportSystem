@@ -60,7 +60,8 @@ PPROF_ADDR:                 pprof性能工具运行的地址及端口
 }
 ```
 
-请特别注意 pprof 监控选项的配置，仅在需要时开启，且不要将其暴露到公网。
+请特别注意 pprof 监控选项的配置，仅在需要时开启，且不要将其暴露到公网。  
+当作为容器部署时，config.json 内的IP相关配置均为服务在容器内的IP地址。在这时可能需要将其配置为0.0.0.0，才能映射到主机的本地地址或公网IP。
 
 **默认值**
 
@@ -88,6 +89,7 @@ docker run -d `
   -v "$(pwd)/db.pass:/app/db.pass:ro" `
   -v "$(pwd)/config.json:/app/config.json" `
   red-shinku/labsys:v0.3
+  
 ```
 
 或使用 docker compose：  
